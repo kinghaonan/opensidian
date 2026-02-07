@@ -1,0 +1,21 @@
+.DS_Store
+node_modules/
+dist/
+*.log
+.env
+.env.local
+*.hot-update.*
+
+# Build output
+main.js
+*.js.map
+styles.css
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db

@@ -1,0 +1,367 @@
+import { App, PluginSettingTab, Setting } from 'obsidian';
+import OpensidianPlugin from '../../main';
+import { PermissionMode, AgentMode, Language, FREE_MODELS, POPULAR_MODELS } from '../../core/types/settings';
+import { t } from '../../i18n';
+
+export class OpensidianSettingTab extends PluginSettingTab {
+  plugin: OpensidianPlugin;
+
+  constructor(app: App, plugin: OpensidianPlugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+
+  display(): void {
+    const { containerEl } = this;
+    const lang = this.plugin.settings.language;
+    containerEl.empty();
+
+    containerEl.createEl('h2', { text: t('generalSettings', lang) });
+
+    // Apply initial theme
+    this.applyTheme();
+  }
+
+  private applyTheme(): void {
+    const theme = this.plugin.settings.theme;
+    const body = document.body;
+    
+    // Remove existing theme classes
+    body.removeClass('opensidian-theme-light');
+    body.removeClass('opensidian-theme-dark');
+    
+    // Apply new theme
+    if (theme === 'light') {
+      body.addClass('opensidian-theme-light');
+      body.removeClass('opensidian-theme-dark');
+    } else if (theme === 'dark') {
+      body.addClass('opensidian-theme-dark');
+      body.removeClass('opensidian-theme-light');
+    } else {
+      // auto mode - use system preference
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (isDark) {
+        body.addClass('opensidian-theme-dark');
+        body.removeClass('opensidian-theme-light');
+      } else {
+        body.addClass('opensidian-theme-light');
+        body.removeClass('opensidian-theme-dark');
+      }
+    }
+  }
+
+    // Language
+    new Setting(containerEl)
+      .setName('Language / 语言')
+      .setDesc('Interface language')
+      .addDropdown(dropdown => dropdown
+        .addOption('zh', '中文')
+        .addOption('en', 'English')
+        .setValue(this.plugin.settings.language)
+        .onChange(async (value: string) => {
+          this.plugin.settings.language = value as Language;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+    // Model Settings
+    containerEl.createEl('h3', { text: t('modelSettings', lang) });
+
+    // Theme
+    new Setting(containerEl)
+      .setName('Theme / 主题')
+      .setDesc('Choose light or dark theme')
+      .addDropdown(dropdown => dropdown
+        .addOption('auto', t('auto', lang))
+        .addOption('light', t('light', lang))
+        .addOption('dark', t('dark', lang))
+        .setValue(this.plugin.settings.theme)
+        .onChange(async (value: string) => {
+          this.plugin.settings.theme = value as 'auto' | 'light' | 'dark';
+          await this.plugin.saveSettings();
+          // Apply theme immediately
+          this.applyTheme();
+        }));
+
+    // Default Mode
+    new Setting(containerEl)
+      .setName('Default Mode / 默认模式')
+      .setDesc(`${t('planModeDesc', lang)} / ${t('buildModeDesc', lang)}`)
+      .addDropdown(dropdown => dropdown
+        .addOption('plan', t('planMode', lang))
+        .addOption('build', t('buildMode', lang))
+        .setValue(this.plugin.settings.agentMode)
+        .onChange(async (value: string) => {
+          this.plugin.settings.agentMode = value as AgentMode;
+          await this.plugin.saveSettings();
+        }));
+
+    // Use Free Models
+    new Setting(containerEl)
+      .setName(t('useFreeModel', lang))
+      .setDesc('Use OpenCode free models when no config available')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.useFreeModels)
+        .onChange(async (value) => {
+          this.plugin.settings.useFreeModels = value;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+    // Model Selection
+    new Setting(containerEl)
+      .setName(t('selectModel', lang))
+      .setDesc('Select AI model to use')
+      .addDropdown(dropdown => {
+        dropdown.addOption('auto', 'Auto (from config)');
+        
+        // Free models
+        if (this.plugin.settings.useFreeModels) {
+          dropdown.addOption('---', '--- Free Models ---');
+          FREE_MODELS.forEach(model => {
+            dropdown.addOption(model.id, model.name);
+          });
+        }
+        
+        // Popular models
+        dropdown.addOption('---', '--- Popular Models ---');
+        POPULAR_MODELS.forEach(model => {
+          dropdown.addOption(model.id, model.name);
+        });
+        
+        dropdown.setValue(this.plugin.settings.model);
+        dropdown.onChange(async (value) => {
+          if (value !== '---') {
+            this.plugin.settings.model = value;
+            await this.plugin.saveSettings();
+            await this.plugin.openCodeService.switchModel(value);
+          }
+        });
+      });
+
+    // Local Model Settings
+    containerEl.createEl('h4', { text: t('useLocalModel', lang) });
+    
+    new Setting(containerEl)
+      .setName('Enable Local Model')
+      .setDesc('Use local Ollama or LM Studio')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.localModel.enabled)
+        .onChange(async (value) => {
+          this.plugin.settings.localModel.enabled = value;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+    if (this.plugin.settings.localModel.enabled) {
+      new Setting(containerEl)
+        .setName('Provider')
+        .addDropdown(dropdown => dropdown
+          .addOption('ollama', 'Ollama')
+          .addOption('lmstudio', 'LM Studio')
+          .addOption('custom', 'Custom')
+          .setValue(this.plugin.settings.localModel.provider)
+          .onChange(async (value) => {
+            this.plugin.settings.localModel.provider = value as any;
+            // Update default URL based on provider
+            if (value === 'ollama') {
+              this.plugin.settings.localModel.baseUrl = 'http://localhost:11434';
+            } else if (value === 'lmstudio') {
+              this.plugin.settings.localModel.baseUrl = 'http://localhost:1234';
+            }
+            await this.plugin.saveSettings();
+            this.display();
+          }));
+
+      new Setting(containerEl)
+        .setName(t('localModelUrl', lang))
+        .addText(text => text
+          .setPlaceholder('http://localhost:11434')
+          .setValue(this.plugin.settings.localModel.baseUrl)
+          .onChange(async (value) => {
+            this.plugin.settings.localModel.baseUrl = value;
+            await this.plugin.saveSettings();
+          }));
+
+      new Setting(containerEl)
+        .setName(t('localModelName', lang))
+        .addText(text => text
+          .setPlaceholder('llama2, codellama, etc.')
+          .setValue(this.plugin.settings.localModel.model)
+          .onChange(async (value) => {
+            this.plugin.settings.localModel.model = value;
+            await this.plugin.saveSettings();
+          }));
+    }
+
+    // OpenCode Path
+    new Setting(containerEl)
+      .setName('OpenCode CLI Path')
+      .setDesc('Path to opencode executable (optional)')
+      .addText(text => text
+        .setPlaceholder('/usr/local/bin/opencode')
+        .setValue(this.plugin.settings.opencodePath || '')
+        .onChange(async (value) => {
+          this.plugin.settings.opencodePath = value || undefined;
+          await this.plugin.saveSettings();
+        }));
+
+    // Auto-load config
+    new Setting(containerEl)
+      .setName('Auto-load opencode config')
+      .setDesc('Load configuration from opencode.json')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.autoLoadOpencodeConfig)
+        .onChange(async (value) => {
+          this.plugin.settings.autoLoadOpencodeConfig = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // UI Settings
+    containerEl.createEl('h3', { text: t('uiSettings', lang) });
+
+    new Setting(containerEl)
+      .setName('Show thinking process')
+      .setDesc('Display AI thinking process (if available)')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.showThinking)
+        .onChange(async (value) => {
+          this.plugin.settings.showThinking = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Collapse thinking by default')
+      .setDesc('Thinking process starts collapsed')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.thinkingCollapsed)
+        .onChange(async (value) => {
+          this.plugin.settings.thinkingCollapsed = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Auto-scroll')
+      .setDesc('Automatically scroll to new messages')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableAutoScroll)
+        .onChange(async (value) => {
+          this.plugin.settings.enableAutoScroll = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Font size')
+      .setDesc('Chat font size in pixels')
+      .addSlider(slider => slider
+        .setLimits(10, 24, 1)
+        .setValue(this.plugin.settings.fontSize)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.fontSize = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // Safety Settings
+    containerEl.createEl('h3', { text: t('safetySettings', lang) });
+
+    new Setting(containerEl)
+      .setName('Permission mode')
+      .setDesc('YOLO: auto-execute, Safe: ask for dangerous tools, Plan: always ask')
+      .addDropdown(dropdown => dropdown
+        .addOption('yolo', 'YOLO')
+        .addOption('safe', 'Safe')
+        .addOption('plan', 'Plan')
+        .setValue(this.plugin.settings.permissionMode)
+        .onChange(async (value: string) => {
+          this.plugin.settings.permissionMode = value as PermissionMode;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Enable command blocklist')
+      .setDesc('Block dangerous bash commands')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableCommandBlocklist)
+        .onChange(async (value) => {
+          this.plugin.settings.enableCommandBlocklist = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // History Settings
+    containerEl.createEl('h3', { text: 'History Settings' });
+
+    new Setting(containerEl)
+      .setName('Conversation retention (days)')
+      .setDesc('How long to keep conversation history')
+      .addSlider(slider => slider
+        .setLimits(1, 90, 1)
+        .setValue(this.plugin.settings.conversationRetentionDays)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.conversationRetentionDays = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Max conversation history')
+      .setDesc('Maximum number of conversations to keep')
+      .addSlider(slider => slider
+        .setLimits(10, 500, 10)
+        .setValue(this.plugin.settings.maxConversationHistory)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          this.plugin.settings.maxConversationHistory = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // MCP Settings
+    containerEl.createEl('h3', { text: t('mcpSettings', lang) });
+
+    new Setting(containerEl)
+      .setName('Enable internal MCP server')
+      .setDesc('Enable built-in vault access tools')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableInternalMCPServer)
+        .onChange(async (value) => {
+          this.plugin.settings.enableInternalMCPServer = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // Advanced
+    containerEl.createEl('h3', { text: 'Advanced' });
+
+    new Setting(containerEl)
+      .setName('Custom system prompt')
+      .setDesc('Additional instructions for the AI')
+      .addTextArea(text => text
+        .setPlaceholder('Enter custom instructions...')
+        .setValue(this.plugin.settings.customSystemPrompt)
+        .onChange(async (value) => {
+          this.plugin.settings.customSystemPrompt = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Debug mode')
+      .setDesc('Enable debug logging')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableDebugMode)
+        .onChange(async (value) => {
+          this.plugin.settings.enableDebugMode = value;
+          await this.plugin.saveSettings();
+        }));
+
+    // Status
+    containerEl.createEl('h3', { text: 'Status' });
+    
+    const status = this.plugin.openCodeService.isReady() 
+      ? `✅ Connected (${this.plugin.openCodeService.getActiveModel()})`
+      : '❌ Not connected';
+    
+    containerEl.createEl('p', { 
+      text: status,
+      cls: 'opensidian-status'
+    });
+  }
+}
