@@ -14,7 +14,7 @@ if you want to view the source, please visit the github repository of this plugi
 */`;
 
 const prod = (process.argv[2] === 'production');
-const outdir = '../opensidian_release';
+const outdir = './release';
 
 // Ensure output directory exists
 if (!fs.existsSync(outdir)) {

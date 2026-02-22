@@ -1,0 +1,11 @@
+{
+  "id": "opensidian",
+  "name": "Opensidian",
+  "version": "0.1.0",
+  "minAppVersion": "0.15.0",
+  "description": "An Obsidian plugin that embeds opencode as an AI collaborator in your vault with integrated MCP tools.",
+  "author": "OpenSource Community",
+  "authorUrl": "https://github.com/yourusername/opensidian",
+  "fundingUrl": "",
+  "isDesktopOnly": true
+}

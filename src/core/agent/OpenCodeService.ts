@@ -1,6 +1,6 @@
 import OpensidianPlugin from '../../main';
 import { OpenCodeConfig, OpenCodeAuth, ProviderConfig } from '../types/opencode';
-import { StreamChunk, QueryOptions } from '../types/chat';
+import { StreamChunk, QueryOptions, ImageAttachment } from '../types/chat';
 import { FREE_MODELS, ZEN_MODELS, ModelInfo, getModelEndpoint } from '../types/settings';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -39,6 +39,23 @@ export class OpenCodeService {
 
   constructor(plugin: OpensidianPlugin) {
     this.plugin = plugin;
+  }
+
+  isReady(): boolean {
+    return this.isInitialized;
+  }
+
+  /**
+   * 重置服务状态，允许重新初始化
+   */
+  reset(): void {
+    this.isInitialized = false;
+    this.opencodePath = null;
+    this.availableModels = [];
+    this.activeProvider = null;
+    this.opencodeConfig = null;
+    this.opencodeAuth = null;
+    console.log('OpenCode service reset');
   }
 
   async initialize(): Promise<void> {
@@ -420,10 +437,6 @@ export class OpenCodeService {
     return this.activeProvider?.id || 'opencode';
   }
 
-  isReady(): boolean {
-    return this.isInitialized;
-  }
-
   hasValidConfig(): boolean {
     return this.activeProvider !== null || 
            this.plugin.settings.localModel.enabled ||
@@ -796,6 +809,12 @@ export class OpenCodeService {
         });
       });
 
+      // 工具调用计数器和循环保护
+      const MAX_TOOL_CALLS = 50; // 最大工具调用次数
+      const MAX_STEP_START = 100; // 最大 step_start 事件数
+      let toolCallCount = 0;
+      let stepStartCount = 0;
+
       // 实时逐行处理 stdout 流
       try {
         for await (const line of rl) {
@@ -838,9 +857,149 @@ export class OpenCodeService {
               };
             }
             
+            // 处理 step_start 事件 - 检测无限循环
+            if (event.type === 'step_start' || event.type === 'step-start') {
+              stepStartCount++;
+              console.log(`[OpenCode] step_start #${stepStartCount}`, event.part?.id || '');
+              
+              // 检查是否超过最大 step_start 数量
+              if (stepStartCount > MAX_STEP_START) {
+                console.error(`Too many step_start events (${stepStartCount}), possible infinite loop detected`);
+                yield {
+                  type: 'error',
+                  error: `检测到可能的无限循环 (step_start: ${stepStartCount})，已自动终止`
+                };
+                return;
+              }
+              continue; // 继续等待后续事件
+            }
+            
             // 处理步骤完成事件（忽略，继续）
-            if (event.type === 'step_finish') {
+            if (event.type === 'step_finish' || event.type === 'step-finish') {
               // 步骤完成，继续等待更多内容
+              continue;
+            }
+            
+            // 记录其他事件类型以便调试
+            if (event.type !== 'text' && event.type !== 'reasoning' && event.type !== 'error') {
+              console.log('[OpenCode Event]', event.type, JSON.stringify(event).substring(0, 500));
+            }
+            
+            // 处理工具调用 - OpenCode 实际格式
+            // { type: 'tool_use', part: { tool: 'read', callID: '...', state: { status, input, output } } }
+            if (event.type && (
+              event.type.includes('tool') || 
+              event.type.includes('mcp') || 
+              event.type.includes('skill') ||
+              event.type.includes('function') ||
+              event.type.includes('action')
+            )) {
+              // 检查工具调用次数，防止无限循环
+              toolCallCount++;
+              console.log(`[OpenCode] Tool call #${toolCallCount}:`, event.type, event.part?.tool || event.part?.name || 'unknown');
+              
+              if (toolCallCount > MAX_TOOL_CALLS) {
+                console.error(`Too many tool calls (${toolCallCount}), possible infinite loop detected`);
+                yield {
+                  type: 'error',
+                  error: `工具调用次数超过限制 (${MAX_TOOL_CALLS})，可能存在循环调用，已自动终止`
+                };
+                return;
+              }
+              
+              // OpenCode 格式: 优先从 part 提取
+              const part = event.part;
+              
+              // 提取工具信息
+              let toolName = 'unknown';
+              let toolArgs: any = {};
+              let toolResult: any = null;
+              let toolStatus: 'pending' | 'executing' | 'completed' | 'failed' = 'executing';
+              let toolId = `tool-${Date.now()}`;
+              
+              if (part && part.type === 'tool') {
+                // OpenCode 实际格式
+                toolName = part.tool || part.name || 'unknown';
+                toolId = part.callID || part.id || toolId;
+                
+                if (part.state) {
+                  toolStatus = part.state.status === 'completed' ? 'completed' : 
+                               part.state.status === 'failed' ? 'failed' : 'executing';
+                  toolArgs = part.state.input || {};
+                  toolResult = part.state.output || null;
+                }
+              } else {
+                // 兼容其他格式
+                const toolInfo = event.tool_call || event.tool || event.function || event;
+                toolName = toolInfo.name || event.name || 'unknown';
+                toolArgs = toolInfo.arguments || toolInfo.input || event.arguments || {};
+                toolStatus = event.type.includes('result') || event.type.includes('output') ? 'completed' : 'executing';
+                toolResult = event.result || event.output || toolInfo.result || null;
+                toolId = toolInfo.id || event.id || event.callID || toolId;
+              }
+              
+              // 解析 arguments 如果是字符串
+              if (typeof toolArgs === 'string') {
+                try {
+                  toolArgs = JSON.parse(toolArgs);
+                } catch {
+                  toolArgs = { raw: toolArgs };
+                }
+              }
+              
+              const toolCallData = {
+                id: toolId,
+                name: toolName,
+                arguments: toolArgs,
+                status: toolStatus
+              };
+              
+              // 如果有结果，发送 tool_result
+              if (toolResult) {
+                let parsedResult = toolResult;
+                if (typeof toolResult === 'string') {
+                  try {
+                    parsedResult = JSON.parse(toolResult);
+                  } catch {
+                    parsedResult = { output: toolResult };
+                  }
+                }
+                yield {
+                  type: 'tool_result',
+                  toolCall: {
+                    ...toolCallData,
+                    result: parsedResult,
+                    status: 'completed'
+                  }
+                };
+              } else {
+                yield {
+                  type: 'tool_call',
+                  toolCall: toolCallData
+                };
+              }
+            }
+            
+            // 处理文件修改事件
+            if (event.type === 'file_change' || event.type === 'file_modified' || event.type === 'write' || event.type === 'edit') {
+              const fileChange = event.file || event.path || event;
+              const filePath = typeof fileChange === 'string' ? fileChange : (fileChange.path || fileChange.name || fileChange.file);
+              
+              if (filePath) {
+                yield {
+                  type: 'tool_call',
+                  toolCall: {
+                    id: `file-${Date.now()}`,
+                    name: 'file_change',
+                    arguments: { path: filePath },
+                    result: { 
+                      path: filePath,
+                      action: event.action || 'modified'
+                    },
+                    status: 'completed'
+                  }
+                };
+              }
             }
             
           } catch (parseError) {
@@ -1004,6 +1163,12 @@ export class OpenCodeService {
           resolve(code);
         });
       });
+
+      // 工具调用计数器和循环保护
+      const MAX_TOOL_CALLS = 50; // 最大工具调用次数
+      const MAX_STEP_START = 100; // 最大 step_start 事件数
+      let toolCallCount = 0;
+      let stepStartCount = 0;
 
       // 实时逐行处理 stdout 流
       try {
@@ -1211,6 +1376,12 @@ export class OpenCodeService {
           resolve(code);
         });
       });
+
+      // 工具调用计数器和循环保护
+      const MAX_TOOL_CALLS = 50; // 最大工具调用次数
+      const MAX_STEP_START = 100; // 最大 step_start 事件数
+      let toolCallCount = 0;
+      let stepStartCount = 0;
 
       // 实时逐行处理 stdout 流
       try {

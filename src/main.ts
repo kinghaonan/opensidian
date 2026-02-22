@@ -95,43 +95,43 @@ export default class OpensidianPlugin extends Plugin {
   }
 
   private async initializeServices() {
+    // Initialize storage (fast, local)
     try {
-      // Initialize storage
       this.storage = new StorageService(this);
       await this.storage.initialize();
     } catch (error) {
       console.warn('Storage service initialization failed:', error);
     }
     
-    // Initialize permission manager
+    // Initialize permission manager (sync, fast)
     this.permissionManager = new PermissionManager(this.settings);
     
-    // Initialize OpenCode service first (MCP manager depends on it)
-    try {
-      this.openCodeService = new OpenCodeService(this);
-      await this.openCodeService.initialize();
-    } catch (error) {
-      console.warn('OpenCode service initialization failed:', error);
-      // Create a placeholder service
-      this.openCodeService = new OpenCodeService(this);
-    }
+    // Create OpenCode service instance but DON'T initialize yet
+    // Initialization will happen lazily when user opens the view
+    this.openCodeService = new OpenCodeService(this);
     
-    // Initialize MCP manager (after OpenCode service)
-    try {
-      this.mcpManager = new McpServerManager(this);
-      await this.mcpManager.initialize();
-    } catch (error) {
-      console.warn('MCP manager initialization failed:', error);
-      // Create empty instance
-      this.mcpManager = new McpServerManager(this);
-    }
+    // Create MCP manager instance (lazy init)
+    this.mcpManager = new McpServerManager(this);
     
-    // Initialize inline edit service
+    // Initialize inline edit service (sync, fast)
     this.inlineEditService = new InlineEditService(this);
+  }
+  
+  async ensureServicesInitialized(): Promise<void> {
+    if (!this.openCodeService.isReady()) {
+      try {
+        await this.openCodeService.initialize();
+      } catch (error) {
+        console.warn('OpenCode service initialization failed:', error);
+      }
+    }
   }
 
   async activateView() {
     const { workspace } = this.app;
+    
+    // Lazy initialize services when view is opened
+    this.ensureServicesInitialized().catch(console.warn);
     
     let leaf: WorkspaceLeaf | null = null;
     const leaves = workspace.getLeavesOfType(VIEW_TYPE_OPENCODE);

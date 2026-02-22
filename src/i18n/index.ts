@@ -16,6 +16,7 @@ interface Translation {
   // Chat
   chatPlaceholder: string;
   send: string;
+  append: string;
   thinking: string;
   newConversation: string;
   settings: string;
@@ -141,6 +142,7 @@ const translations: Record<Language, Translation> = {
     
     chatPlaceholder: '输入消息... (@引用文件, /命令)',
     send: '发送',
+    append: '追加',
     thinking: '思考中...',
     newConversation: '新对话',
     settings: '设置',
@@ -252,6 +254,7 @@ const translations: Record<Language, Translation> = {
     
     chatPlaceholder: 'Type a message... (@ for files, / for commands)',
     send: 'Send',
+    append: 'Append',
     thinking: 'Thinking...',
     newConversation: 'New Chat',
     settings: 'Settings',

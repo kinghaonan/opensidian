@@ -176,7 +176,8 @@ export class StorageService {
       }
     } catch (error) {
       // Directory might not exist yet, that's ok
-      if (error.code !== 'ENOENT') {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code !== 'ENOENT') {
         console.error('Error cleaning up old attachments:', error);
       }
     }
