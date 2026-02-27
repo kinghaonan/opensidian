@@ -247,12 +247,16 @@ export class MessageList {
   showErrorMessage(container: HTMLElement, error: string): void {
     const lang = this.plugin.settings.language as Language;
     const contentEl = container.querySelector('.opensidian-message-content');
+    
+    // 确保 error 是字符串，处理可能传入的对象或其他类型
+    const errorStr = typeof error === 'string' ? error : JSON.stringify(error);
+    
     if (contentEl) {
       contentEl.removeClass('opensidian-streaming');
       contentEl.addClass('opensidian-error');
       
-      let userError = error;
-      if (error.includes('timeout') || error.includes('terminated') || error.includes('SIGTERM')) {
+      let userError = errorStr;
+      if (errorStr.includes('timeout') || errorStr.includes('terminated') || errorStr.includes('SIGTERM')) {
         userError = lang === 'zh' 
           ? '请求超时。对话历史可能过长，建议开始新对话。' 
           : 'Request timeout. Conversation history may be too long.';

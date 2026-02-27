@@ -335,29 +335,33 @@ export class OpenCodeService {
   async loadAvailableModels(): Promise<ModelInfo[]> {
     this.availableModels = [];
 
-    // 1. Add free models
-    this.availableModels.push(...FREE_MODELS);
-
-    // 2. Add Zen models if user has API key
-    if (this.plugin.settings.opencodeZenApiKey || this.opencodeAuth?.['opencode']) {
-      this.availableModels.push(...ZEN_MODELS);
-    }
-
-    // 3. Try to load models from OpenCode CLI
+    // 优先从 OpenCode CLI 获取模型列表
+    let cliModels: ModelInfo[] = [];
     if (this.opencodePath) {
       try {
-        const cliModels = await this.getModelsFromCLI();
-        for (const model of cliModels) {
-          if (!this.availableModels.find(m => m.id === model.id)) {
-            this.availableModels.push(model);
-          }
+        cliModels = await this.getModelsFromCLI();
+        if (cliModels.length > 0) {
+          console.log(`Loaded ${cliModels.length} models from OpenCode CLI`);
+          this.availableModels.push(...cliModels);
         }
       } catch (error) {
         console.warn('Failed to load models from CLI:', error);
       }
     }
 
-    // 4. Add local models if enabled
+    // 如果 CLI 没有返回模型，才使用硬编码的免费模型作为后备
+    if (this.availableModels.length === 0) {
+      console.warn('No models from CLI, using hardcoded fallback models');
+      // 添加免费模型作为后备
+      this.availableModels.push(...FREE_MODELS);
+      
+      // 如果用户有 API key，添加 Zen 模型
+      if (this.plugin.settings.opencodeZenApiKey || this.opencodeAuth?.['opencode']) {
+        this.availableModels.push(...ZEN_MODELS);
+      }
+    }
+
+    // 添加本地模型（如果启用）
     if (this.plugin.settings.localModel.enabled) {
       this.availableModels.push({
         id: `local/${this.plugin.settings.localModel.model}`,
@@ -366,7 +370,7 @@ export class OpenCodeService {
       });
     }
 
-    console.log(`Loaded ${this.availableModels.length} available models`);
+    console.log(`Loaded ${this.availableModels.length} available models total`);
     return this.availableModels;
   }
 
@@ -826,9 +830,26 @@ export class OpenCodeService {
             // 处理错误事件
             if (event.type === 'error') {
               console.error('CLI error event:', event);
+              
+              // 提取错误消息，处理可能的嵌套结构
+              let errorMessage = 'CLI error';
+              if (event.error) {
+                if (typeof event.error === 'string') {
+                  errorMessage = event.error;
+                } else if (event.error.data?.message) {
+                  // 处理嵌套结构：{ name: 'UnknownError', data: { message: '...' } }
+                  errorMessage = event.error.data.message;
+                } else if (event.error.message) {
+                  errorMessage = event.error.message;
+                } else {
+                  // 其他对象，尝试 JSON 化
+                  errorMessage = JSON.stringify(event.error);
+                }
+              }
+              
               yield {
                 type: 'error',
-                error: event.error?.message || event.error || 'CLI error'
+                error: errorMessage
               };
               return;
             }
