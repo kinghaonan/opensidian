@@ -1,6 +1,6 @@
 {
   "name": "opensidian",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An Obsidian plugin that embeds opencode as an AI collaborator in your vault",
   "main": "main.js",
   "scripts": {

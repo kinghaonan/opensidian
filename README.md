@@ -4,14 +4,14 @@
 
 ---
 
-<a href="https://github.com/yourusername/opensidian/stargazers">
-  <img alt="GitHub Stars" src="https://img.shields.io/github/stars/yourusername/opensidian?style=flat-square">
+<a href="https://github.com/kinghaonan/opensidian/stargazers">
+  <img alt="GitHub Stars" src="https://img.shields.io/github/stars/kinghaonan/opensidian?style=flat-square">
 </a>
-<a href="https://github.com/yourusername/opensidian/issues">
-  <img alt="GitHub Issues" src="https://img.shields.io/github/issues/yourusername/opensidian?style=flat-square">
+<a href="https://github.com/kinghaonan/opensidian/issues">
+  <img alt="GitHub Issues" src="https://img.shields.io/github/issues/kinghaonan/opensidian?style=flat-square">
 </a>
-<a href="https://github.com/yourusername/opensidian/blob/main/LICENSE">
-  <img alt="License" src="https://img.shields.io/github/license/yourusername/opensidian?style=flat-square">
+<a href="https://github.com/kinghaonan/opensidian/blob/main/LICENSE">
+  <img alt="License" src="https://img.shields.io/github/license/kinghaonan/opensidian?style=flat-square">
 </a>
 
 ## English
@@ -26,14 +26,14 @@ Opensidian is a powerful Obsidian plugin that integrates **OpenCode AI** as an i
 - **🎯 Context-Aware Intelligence**: Automatically includes active file context and supports @-mentions for files
 - **✏️ Inline Text Editing**: Select any text, describe your edit, and preview changes with diff view
 - **🔧 Built-in MCP Tools**: Comprehensive tools for reading, writing, searching, and managing your vault
+- **🧰 MCP/Skill Picker**: Searchable, grouped selector with quick tool summary shown in chat
+- **🧩 Tool Call Collapsing**: Collapse long tool call chains for cleaner sessions
 - **🛡️ Safety Controls**: Three permission modes (YOLO/Safe/Plan) with command blocklists
 - **🌍 Multi-Language Support**: Available in English, Chinese, Japanese, Korean, and more
 - **💬 Conversation History**: Persist and manage your AI conversations with search and batch operations
 - **📎 File Attachments**: Upload files for AI analysis (saved to temporary vault location)
 
 ### Installation
-
-**Note**: Please update the `authorUrl` in `manifest.json` with your actual GitHub repository URL before releasing.
 
 1. Download the latest release from [GitHub Releases](https://github.com/kinghaonan/opensidian/releases)
 2. Extract to your vault's `.obsidian/plugins/opensidian/` folder
@@ -60,10 +60,12 @@ Opensidian is a powerful Obsidian plugin that integrates **OpenCode AI** as an i
 #### Chat Interface
 
 - **Real-time Streaming**: Watch AI responses appear character by character
+- **Streaming Optimizations**: Faster long-task handling with throttled updates and final Markdown render
 - **Thinking Process**: Toggle visibility of AI's reasoning
 - **Model Selection**: Switch between free, paid, or local models
 - **Message History**: Browse and load past conversations
 - **File References**: Use `@filename` to include specific notes in context
+- **Tool Summary**: Selected MCP/Skill tools are displayed with each message
 
 #### Inline Edit
 
@@ -163,6 +165,11 @@ npm test
 npm run lint
 ```
 
+### Release
+
+1. Run `npm run build`
+2. Upload `release/main.js`, `release/styles.css`, and `manifest.json` to GitHub Releases
+
 ### License
 
 MIT License - see [LICENSE](LICENSE) file for details.
@@ -188,14 +195,14 @@ Opensidian 是一个强大的 Obsidian 插件，将 **OpenCode AI** 集成为您
 - **🎯 上下文感知智能**：自动包含当前文件内容，支持 `@` 文件引用
 - **✏️ 内联文本编辑**：选择任意文本，描述编辑需求，预览差异视图
 - **🔧 内置 MCP 工具**：完整的笔记库读写、搜索和管理工具集
+- **🧰 MCP/Skill 选择器**：支持搜索与分组，并在聊天中显示工具摘要
+- **🧩 工具调用折叠**：工具调用过多时可折叠，保持对话清爽
 - **🛡️ 安全控制**：三种权限模式（YOLO/安全/计划）配合命令黑名单
 - **🌍 多语言支持**：支持中文、英文、日文、韩文等多种语言
 - **💬 对话历史**：持久化和管理 AI 对话，支持搜索和批量操作
 - **📎 文件附件**：上传文件供 AI 分析（保存到笔记库临时位置）
 
 ### 安装
-
-**注意**：发布前请更新 `manifest.json` 中的 `authorUrl` 为实际的 GitHub 仓库地址。
 
 1. 从 [GitHub Releases](https://github.com/kinghaonan/opensidian/releases) 下载最新版本
 2. 解压到笔记库的 `.obsidian/plugins/opensidian/` 目录
@@ -222,10 +229,12 @@ Opensidian 是一个强大的 Obsidian 插件，将 **OpenCode AI** 集成为您
 #### 聊天界面
 
 - **实时流式响应**：观看 AI 逐字符生成回复
+- **流式优化**：长任务更稳定，结尾再渲染 Markdown
 - **思考过程**：切换显示 AI 的推理过程
 - **模型选择**：在免费、付费或本地模型间切换
 - **消息历史**：浏览和加载历史对话
 - **文件引用**：使用 `@文件名` 将特定笔记纳入上下文
+- **工具摘要**：展示本次选用的 MCP/Skill
 
 #### 内联编辑
 
@@ -324,6 +333,11 @@ npm test
 # 代码检查
 npm run lint
 ```
+
+### 发布
+
+1. 运行 `npm run build`
+2. 将 `release/main.js`、`release/styles.css` 与 `manifest.json` 上传到 GitHub Releases
 
 ### 许可证
 
