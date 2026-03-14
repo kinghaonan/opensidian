@@ -1,0 +1,1251 @@
+/* ================================
+   Opensidian Chat UI Styles
+   Inspired by Claudian - Clean & Professional Design
+   ================================ */
+
+/* CSS Variables for theming */
+.opensidian-container {
+    /* Primary colors - Claude-inspired blue */
+    --os-primary-color: #5b8def;
+    --os-primary-hover: #4a7ade;
+    --os-primary-light: rgba(91, 141, 239, 0.1);
+    
+    /* Background colors */
+    --os-bg-color: #ffffff;
+    --os-bg-secondary: #f7f7f8;
+    --os-bg-tertiary: #f0f0f2;
+    --os-bg-hover: #e8e8ea;
+    
+    /* Text colors */
+    --os-text-primary: #1a1a1a;
+    --os-text-secondary: #6b6b75;
+    --os-text-muted: #9b9ba3;
+    
+    /* Message backgrounds */
+    --os-user-message-bg: #f0f4ff;
+    --os-assistant-message-bg: #ffffff;
+    
+    /* Special sections */
+    --os-thinking-bg: #fff8e1;
+    --os-thinking-border: #ffd54f;
+    --os-tool-bg: #f5f5f5;
+    --os-error-color: #d32f2f;
+    --os-success-color: #388e3c;
+    
+    /* Borders and shadows */
+    --os-border-color: #e0e0e0;
+    --os-border-radius-sm: 6px;
+    --os-border-radius-md: 8px;
+    --os-border-radius-lg: 12px;
+    --os-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --os-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+    
+    /* Transitions */
+    --os-transition: all 0.15s ease;
+}
+
+/* Main Container Layout */
+.opensidian-container {
+    display: flex;
+    height: 100%;
+    background-color: var(--os-bg-color);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    color: var(--os-text-primary);
+    overflow: hidden;
+    line-height: 1.5;
+}
+
+/* Sidebar Styles - Claudian style */
+.opensidian-sidebar {
+    width: 260px;
+    background: var(--os-bg-secondary);
+    border-right: 1px solid var(--os-border-color);
+    display: flex;
+    flex-direction: column;
+    transition: var(--os-transition);
+    flex-shrink: 0;
+}
+
+.opensidian-sidebar-collapsed {
+    width: 0;
+    border-right: none;
+    overflow: hidden;
+}
+
+.opensidian-sidebar-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--os-border-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--os-bg-color);
+}
+
+.opensidian-sidebar-header h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--os-text-primary);
+    flex: 1;
+}
+
+.opensidian-sidebar-collapse-btn,
+.opensidian-sidebar-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: var(--os-border-radius-sm);
+    color: var(--os-text-secondary);
+    transition: var(--os-transition);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.opensidian-sidebar-collapse-btn:hover,
+.opensidian-sidebar-btn:hover {
+    background: var(--os-bg-hover);
+    color: var(--os-primary-color);
+}
+
+/* History Panel - Clean list design */
+.opensidian-history-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+}
+
+.opensidian-history-panel-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    margin: 6px 8px;
+    border: 1px solid var(--os-border-color);
+    background: var(--os-bg-color);
+}
+
+.opensidian-history-panel-item:hover {
+    background: var(--os-bg-hover);
+    border-color: rgba(0, 0, 0, 0.08);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.opensidian-history-checkbox {
+    margin-top: 3px;
+    cursor: pointer;
+}
+
+.opensidian-history-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.opensidian-history-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--os-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 2px;
+}
+
+.opensidian-history-date {
+    font-size: 11px;
+    color: var(--os-text-muted);
+}
+
+.opensidian-history-delete-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--os-border-radius-sm);
+    opacity: 0;
+    transition: var(--os-transition);
+    font-size: 13px;
+}
+
+.opensidian-history-panel-item:hover .opensidian-history-delete-btn {
+    opacity: 1;
+}
+
+.opensidian-history-delete-btn:hover {
+    background: rgba(211, 47, 47, 0.1);
+}
+
+.opensidian-history-empty {
+    text-align: center;
+    color: var(--os-text-muted);
+    font-size: 12px;
+    padding: 20px;
+}
+
+/* Main Content Area */
+.opensidian-main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Header Styles - Minimal toolbar design */
+.opensidian-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--os-border-color);
+    background: var(--os-bg-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.opensidian-header-left,
+.opensidian-header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.opensidian-model-wrapper {
+    position: relative;
+}
+
+.opensidian-model-btn {
+    background: var(--os-bg-secondary);
+    border: 1px solid var(--os-border-color);
+    padding: 5px 10px;
+    border-radius: var(--os-border-radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--os-text-primary);
+    cursor: pointer;
+    transition: var(--os-transition);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.opensidian-model-btn:hover {
+    background: var(--os-bg-hover);
+    border-color: var(--os-primary-color);
+}
+
+.opensidian-model-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    background: var(--os-bg-color);
+    border: 1px solid var(--os-border-color);
+    border-radius: var(--os-border-radius-md);
+    box-shadow: var(--os-shadow-md);
+    min-width: 200px;
+    max-height: 350px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+    animation: slideDown 0.15s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.opensidian-dropdown-open {
+    display: block;
+}
+
+.opensidian-model-group {
+    padding: 6px;
+}
+
+.opensidian-model-group-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--os-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 8px;
+}
+
+.opensidian-model-item {
+    padding: 6px 10px;
+    border-radius: var(--os-border-radius-sm);
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--os-text-primary);
+    transition: var(--os-transition);
+}
+
+.opensidian-model-item:hover {
+    background: var(--os-bg-hover);
+}
+
+.opensidian-model-item-active {
+    background: var(--os-user-message-bg);
+    color: var(--os-primary-color);
+    font-weight: 500;
+}
+
+.opensidian-model-refresh {
+    padding: 8px 12px;
+    border-top: 1px solid var(--os-border-color);
+    text-align: center;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--os-primary-color);
+    transition: var(--os-transition);
+}
+
+.opensidian-model-refresh:hover {
+    background: var(--os-bg-tertiary);
+}
+
+.opensidian-status-indicator {
+    font-size: 11px;
+    cursor: pointer;
+    transition: var(--os-transition);
+}
+
+.opensidian-status-connected {
+    color: var(--os-success-color);
+}
+
+.opensidian-status-api {
+    color: var(--os-primary-color);
+}
+
+.opensidian-status-disconnected {
+    color: var(--os-error-color);
+}
+
+.opensidian-header-btn,
+.opensidian-mode-btn {
+    background: var(--os-bg-secondary);
+    border: none;
+    padding: 5px 8px;
+    border-radius: var(--os-border-radius-sm);
+    cursor: pointer;
+    color: var(--os-text-secondary);
+    transition: var(--os-transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.opensidian-header-btn:hover,
+.opensidian-mode-btn:hover {
+    background: var(--os-bg-hover);
+    color: var(--os-primary-color);
+}
+
+.opensidian-mode-btn {
+    padding: 5px 10px;
+}
+
+.opensidian-header-stop-btn {
+    background: var(--os-error-color);
+    color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: var(--os-radius-md);
+    cursor: pointer;
+    transition: var(--os-transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.opensidian-header-stop-btn.visible {
+    display: flex;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* Messages Area - Clean conversation view */
+.opensidian-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--os-bg-color);
+}
+
+.opensidian-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.opensidian-messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.opensidian-messages::-webkit-scrollbar-thumb {
+    background: var(--os-border-color);
+    border-radius: 3px;
+}
+
+.opensidian-messages::-webkit-scrollbar-thumb:hover {
+    background: var(--os-text-muted);
+}
+
+/* Message Styles - Minimal design */
+.opensidian-message {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    max-width: 850px;
+    margin-left: auto;
+    margin-right: auto;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.opensidian-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--os-border-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    background: var(--os-bg-secondary);
+}
+
+.opensidian-message-container {
+    flex: 1;
+    min-width: 0;
+}
+
+.opensidian-message-content {
+    background: var(--os-assistant-message-bg);
+    padding: 12px 16px;
+    border-radius: var(--os-border-radius-md);
+    line-height: 1.6;
+    font-size: 13px;
+    color: var(--os-text-primary);
+}
+
+.opensidian-user .opensidian-message-content {
+    background: var(--os-user-message-bg);
+}
+
+.opensidian-message-tools {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--os-text-muted);
+}
+
+.opensidian-message-tools-title {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+}
+
+.opensidian-message-tools-item {
+    background: var(--os-bg-secondary);
+    border: 1px solid var(--os-border-color);
+    padding: 4px 6px;
+    border-radius: 6px;
+    color: var(--os-text-primary);
+}
+
+.opensidian-message-content ul,
+.opensidian-message-content ol {
+    margin: 8px 0;
+    padding-left: 24px;
+}
+
+.opensidian-message-content li {
+    margin-bottom: 4px;
+}
+
+.opensidian-message-content p {
+    margin: 8px 0;
+}
+
+.opensidian-message-content code {
+    background: var(--os-bg-secondary);
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 12px;
+}
+
+.opensidian-message-content pre {
+    background: #1f2937;
+    color: #f9fafb;
+    padding: 14px;
+    border-radius: var(--os-border-radius-sm);
+    overflow-x: auto;
+    margin: 10px 0;
+}
+
+.opensidian-message-content pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+}
+
+.opensidian-message-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    opacity: 0;
+    transition: var(--os-transition);
+}
+
+.opensidian-message:hover .opensidian-message-actions {
+    opacity: 1;
+}
+
+.opensidian-action-btn {
+    background: transparent;
+    border: 1px solid var(--os-border-color);
+    padding: 3px 6px;
+    border-radius: var(--os-border-radius-sm);
+    cursor: pointer;
+    color: var(--os-text-muted);
+    transition: var(--os-transition);
+    font-size: 11px;
+}
+
+.opensidian-action-btn:hover {
+    background: var(--os-bg-hover);
+    color: var(--os-primary-color);
+    border-color: var(--os-primary-color);
+}
+
+.opensidian-copy-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 3px;
+    border-radius: var(--os-border-radius-sm);
+    color: var(--os-text-muted);
+    transition: var(--os-transition);
+    opacity: 0.5;
+}
+
+.opensidian-user .opensidian-copy-btn {
+    opacity: 0.5;
+}
+
+.opensidian-copy-btn:hover {
+    opacity: 1;
+    color: var(--os-primary-color);
+}
+
+.opensidian-message-time {
+    font-size: 10px;
+    color: var(--os-text-muted);
+    margin-top: 4px;
+    padding-left: 2px;
+}
+
+/* Thinking Section - Compact design */
+.opensidian-thinking {
+    background: var(--os-thinking-bg);
+    border: 1px solid var(--os-thinking-border);
+    border-radius: var(--os-border-radius-sm);
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: var(--os-transition);
+}
+
+.opensidian-thinking-header {
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #996d00;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+}
+
+.opensidian-thinking-header:hover {
+    background: rgba(255, 213, 79, 0.15);
+}
+
+.opensidian-thinking-content {
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #8a6d0b;
+    border-top: 1px solid rgba(255, 213, 79, 0.3);
+    white-space: pre-wrap;
+}
+
+.opensidian-thinking.collapsed .opensidian-thinking-content {
+    display: none;
+}
+
+/* Tool Calls - Minimal card design */
+.opensidian-tool-calls {
+    margin: 10px 0;
+}
+
+.opensidian-tool-calls-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    color: var(--os-text-secondary);
+    font-size: 11px;
+}
+
+.opensidian-tool-calls-title {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.opensidian-tool-calls-toggle {
+    margin-left: auto;
+    background: var(--os-bg-secondary);
+    border: 1px solid var(--os-border-color);
+    color: var(--os-text-secondary);
+    padding: 2px 8px;
+    border-radius: var(--os-border-radius-sm);
+    font-size: 11px;
+    cursor: pointer;
+    transition: var(--os-transition);
+}
+
+.opensidian-tool-calls-toggle:hover {
+    color: var(--os-primary-color);
+    border-color: var(--os-primary-color);
+}
+
+.opensidian-tool-calls-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 240px;
+    overflow: auto;
+}
+
+.opensidian-tool-calls.collapsed .opensidian-tool-calls-list {
+    display: none;
+}
+
+.opensidian-tool-call {
+    background: var(--os-tool-bg);
+    border: 1px solid var(--os-border-color);
+    border-radius: var(--os-border-radius-sm);
+    margin-bottom: 6px;
+    overflow: hidden;
+    transition: var(--os-transition);
+}
+
+.opensidian-tool-header {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--os-bg-secondary);
+    border-bottom: 1px solid var(--os-border-color);
+}
+
+.opensidian-tool-status {
+    font-size: 13px;
+}
+
+.opensidian-tool-name {
+    color: var(--os-text-primary);
+}
+
+.opensidian-tool-toggle {
+    margin-left: auto;
+    transition: var(--os-transition);
+}
+
+.opensidian-tool-call.collapsed .opensidian-tool-content {
+    display: none;
+}
+
+.opensidian-tool-content {
+    padding: 10px 12px;
+}
+
+.opensidian-tool-arguments,
+.opensidian-tool-result {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    background: var(--os-bg-secondary);
+    padding: 8px;
+    border-radius: var(--os-border-radius-sm);
+    margin-top: 6px;
+    overflow-x: auto;
+}
+
+.opensidian-tool-arg-label {
+    color: var(--os-text-muted);
+    margin-right: 4px;
+}
+
+.opensidian-tool-error {
+    color: var(--os-error-color);
+    font-size: 11px;
+    margin-top: 6px;
+    padding: 6px;
+    background: rgba(211, 47, 47, 0.08);
+    border-radius: var(--os-border-radius-sm);
+}
+
+/* Welcome Message */
+.opensidian-welcome {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.opensidian-welcome .opensidian-message-content {
+    background: transparent;
+    box-shadow: none;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.opensidian-welcome h3,
+.opensidian-welcome strong {
+    color: var(--os-text-primary);
+    font-size: 18px;
+    margin-bottom: 12px;
+}
+
+.opensidian-welcome ul {
+    text-align: left;
+    margin: 16px auto;
+    max-width: 500px;
+}
+
+.opensidian-welcome li {
+    margin-bottom: 8px;
+    color: var(--os-text-secondary);
+}
+
+/* Mode Indicator */
+.opensidian-mode-indicator {
+    text-align: center;
+    padding: 8px 16px;
+    background: var(--os-bg-tertiary);
+    border-radius: var(--os-radius-md);
+    font-size: 13px;
+    color: var(--os-primary-color);
+    margin: 16px auto;
+    max-width: 400px;
+}
+
+/* Input Area - Clean floating design */
+.opensidian-input-area {
+    padding: 12px 16px;
+    background: var(--os-bg-color);
+    border-top: 1px solid var(--os-border-color);
+}
+
+.opensidian-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.opensidian-selected-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    color: var(--os-text-muted);
+    font-size: 11px;
+}
+
+.opensidian-selected-tools-label {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.opensidian-selected-tool {
+    background: var(--os-bg-secondary);
+    border: 1px solid var(--os-border-color);
+    color: var(--os-text-primary);
+    padding: 2px 6px;
+    border-radius: var(--os-border-radius-sm);
+    font-size: 11px;
+}
+
+.opensidian-attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--os-bg-secondary);
+    padding: 5px 8px;
+    border-radius: var(--os-border-radius-sm);
+    font-size: 11px;
+    color: var(--os-text-primary);
+}
+
+.opensidian-attachment-item img {
+    height: 28px;
+    width: 28px;
+    object-fit: cover;
+    border-radius: 2px;
+}
+
+.opensidian-attachment-remove {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--os-text-muted);
+    padding: 2px;
+    border-radius: 4px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.opensidian-attachment-remove:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--os-error-color);
+}
+
+.opensidian-input-wrapper {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    background: var(--os-bg-secondary);
+    border: 1px solid var(--os-border-color);
+    border-radius: var(--os-border-radius-md);
+    padding: 8px 12px;
+    transition: var(--os-transition);
+}
+
+.opensidian-input-wrapper:focus-within {
+    border-color: var(--os-primary-color);
+    background: var(--os-bg-color);
+}
+
+.opensidian-attach-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: var(--os-border-radius-sm);
+    color: var(--os-text-muted);
+    transition: var(--os-transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.opensidian-attach-btn:hover {
+    background: var(--os-bg-hover);
+    color: var(--os-primary-color);
+}
+
+.opensidian-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    resize: none;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--os-text-primary);
+    max-height: 200px;
+    min-height: 22px;
+}
+
+.opensidian-input:focus {
+    outline: none;
+}
+
+.opensidian-input::placeholder {
+    color: var(--os-text-muted);
+}
+
+.opensidian-button-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.opensidian-send-btn,
+.opensidian-append-btn {
+    background: var(--os-primary-color);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: var(--os-border-radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--os-transition);
+    white-space: nowrap;
+}
+
+.opensidian-send-btn:hover,
+.opensidian-append-btn:hover {
+    background: var(--os-primary-hover);
+}
+
+.opensidian-streaming-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+/* Error States */
+.opensidian-error {
+    color: var(--os-error-color);
+    background: rgba(239, 68, 68, 0.05);
+    border-left: 3px solid var(--os-error-color);
+    padding: 12px 16px;
+    border-radius: var(--os-radius-sm);
+}
+
+/* Drag and Drop */
+.opensidian-drag-over {
+    background: rgba(91, 141, 239, 0.05);
+    border-color: var(--os-primary-color);
+}
+
+/* Attachments Preview */
+.opensidian-attachments-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.opensidian-attachment {
+    max-width: 200px;
+    border-radius: var(--os-radius-md);
+    border: 1px solid var(--os-border-color);
+}
+
+.opensidian-attachment-file {
+    background: var(--os-bg-tertiary);
+    padding: 8px 12px;
+    border-radius: var(--os-radius-md);
+    font-size: 12px;
+    color: var(--os-text-primary);
+}
+
+/* Streaming State */
+.opensidian-streaming .opensidian-message-content {
+    opacity: 0.9;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .opensidian-sidebar {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 100;
+        box-shadow: var(--os-shadow-lg);
+    }
+    
+    .opensidian-sidebar-collapsed {
+        width: 0;
+        transform: translateX(-100%);
+    }
+    
+    .opensidian-header {
+        padding: 10px 14px;
+    }
+    
+    .opensidian-messages {
+        padding: 14px;
+    }
+    
+    .opensidian-input-area {
+        padding: 12px 14px;
+    }
+}
+
+/* Dark Mode Support (Optional) */
+.theme-dark .opensidian-container {
+    --os-bg-color: #1f2937;
+    --os-bg-secondary: #111827;
+    --os-bg-tertiary: #374151;
+    --os-border-color: #4b5563;
+    --os-text-primary: #f9fafb;
+    --os-text-secondary: #d1d5db;
+    --os-text-muted: #9ca3af;
+    --os-user-message-bg: #1e3a5f;
+    --os-assistant-message-bg: #1f2937;
+    --os-thinking-bg: #422006;
+    --os-thinking-border: #92400e;
+}
+
+/* ================================
+   Quick Picker Buttons Styles
+   ================================ */
+.opensidian-quick-picker-buttons {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--os-border-color);
+    background: var(--os-bg-tertiary);
+}
+
+.opensidian-mcp-btn,
+.opensidian-skill-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--os-border-color);
+    border-radius: var(--os-radius-sm);
+    background: var(--os-bg-secondary);
+    color: var(--os-text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--os-transition);
+}
+
+.opensidian-mcp-btn:hover,
+.opensidian-skill-btn:hover {
+    background: var(--os-bg-hover);
+    border-color: var(--os-primary-color);
+    transform: translateY(-1px);
+    box-shadow: var(--os-shadow-sm);
+}
+
+.opensidian-mcp-btn:active,
+.opensidian-skill-btn:active {
+    transform: translateY(0);
+}
+
+/* Tool Picker Popup */
+.opensidian-tool-picker-popup {
+    background: var(--os-bg-color, #ffffff);
+    border: 1px solid var(--os-border-color, #e0e0e0);
+    color: var(--os-text-primary, #1a1a1a);
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+    padding: 8px;
+    min-width: 220px;
+    width: 260px;
+    max-width: 280px;
+    max-height: 320px;
+    overflow: hidden;
+    z-index: 1000;
+    position: relative;
+    opacity: 1;
+}
+
+.opensidian-tool-picker-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--os-text-primary);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--os-border-color);
+}
+
+.opensidian-tool-picker-close {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--os-text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 20px;
+}
+
+.opensidian-tool-picker-close:hover {
+    background: var(--os-bg-hover);
+    color: var(--os-text-primary);
+}
+
+.opensidian-tool-picker-search {
+    width: 100%;
+    margin: 0 0 10px 0;
+    padding: 6px 8px;
+    border: 1px solid var(--os-border-color, #e0e0e0);
+    border-radius: 8px;
+    background: var(--os-bg-secondary, #f7f7f8);
+    color: var(--os-text-primary, #1a1a1a);
+    font-size: 12px;
+}
+
+.opensidian-tool-picker-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: var(--os-text-secondary);
+}
+
+.opensidian-tool-picker-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.opensidian-tool-picker-toggle input {
+    accent-color: var(--os-primary-color);
+}
+
+.opensidian-tool-picker-search:focus {
+    outline: none;
+    border-color: var(--os-primary-color);
+}
+
+.opensidian-tool-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding-right: 4px;
+    background: var(--os-bg-color, #ffffff);
+}
+
+.opensidian-tool-picker-group {
+    font-size: 11px;
+    color: var(--os-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 4px 2px 2px;
+}
+
+.opensidian-tool-picker-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.opensidian-tool-picker-status {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.opensidian-tool-picker-status.enabled {
+    color: var(--os-success-color);
+}
+
+.opensidian-tool-picker-status.disabled {
+    color: var(--os-text-muted);
+}
+
+.opensidian-tool-picker-item:hover {
+    background: var(--os-bg-hover);
+    border-color: color-mix(in srgb, var(--os-border-color) 60%, transparent 40%);
+}
+
+.opensidian-tool-picker-checkbox {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    margin-top: 3px;
+    accent-color: var(--os-primary-color);
+}
+
+.opensidian-tool-picker-label {
+    flex: 1;
+    min-width: 0;
+}
+
+.opensidian-tool-picker-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--os-text-primary);
+    margin-bottom: 2px;
+}
+
+.opensidian-tool-picker-desc {
+    font-size: 12px;
+    color: var(--os-text-secondary);
+    line-height: 1.3;
+}
+
+.opensidian-tool-picker-empty {
+    font-size: 13px;
+    color: var(--os-text-muted);
+    text-align: center;
+    padding: 20px;
+}
+
+.opensidian-tool-picker-confirm {
+    width: 100%;
+    padding: 10px 16px;
+    background: var(--os-primary-color);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--os-transition);
+}
+
+.opensidian-tool-picker-confirm:hover {
+    background: var(--os-primary-hover);
+    box-shadow: var(--os-shadow-sm);
+}
