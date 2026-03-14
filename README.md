@@ -16,27 +16,26 @@
 
 ## English
 
-### Description
+### Overview
 
-Opensidian is a powerful Obsidian plugin that integrates **OpenCode AI** as an intelligent collaborator directly within your vault. Leveraging the **Model Context Protocol (MCP)**, it provides AI assistants with secure, controlled access to your notes and files, enabling intelligent content creation, editing, and management.
+Opensidian is a modern Obsidian plugin that embeds **OpenCode AI** directly inside your vault. It combines a fast chat UI with **Model Context Protocol (MCP)** tools, enabling safe, controlled reading and editing of your notes.
 
-### Key Features
+### Highlights
 
-- **🤖 AI-Powered Chat Interface**: Chat with multiple AI models (OpenCode Zen, Ollama, custom providers)
-- **🎯 Context-Aware Intelligence**: Automatically includes active file context and supports @-mentions for files
-- **✏️ Inline Text Editing**: Select any text, describe your edit, and preview changes with diff view
-- **🔧 Built-in MCP Tools**: Comprehensive tools for reading, writing, searching, and managing your vault
-- **🧰 MCP/Skill Picker**: Searchable, grouped selector with quick tool summary shown in chat
-- **🧩 Tool Call Collapsing**: Collapse long tool call chains for cleaner sessions
-- **🛡️ Safety Controls**: Three permission modes (YOLO/Safe/Plan) with command blocklists
-- **🌍 Multi-Language Support**: Available in English, Chinese, Japanese, Korean, and more
-- **💬 Conversation History**: Persist and manage your AI conversations with search and batch operations
-- **📎 File Attachments**: Upload files for AI analysis (saved to temporary vault location)
+- **AI Chat in Obsidian**: Work with free, paid, or local models
+- **Context Awareness**: Automatic active-file context and `@filename` references
+- **Inline Editing**: Select text, describe changes, preview diffs, then apply
+- **MCP + Skills**: Tooling to read/write/search the vault plus OpenCode skills
+- **MCP/Skill Picker**: Search, filter, and group tools with instant selection
+- **Tool Call Collapsing**: Long tool sequences can be folded for clarity
+- **Streaming Optimizations**: Smooth long responses with throttled updates
+- **Safety Modes**: YOLO / Safe / Plan permission controls
+- **Multi-language UI**: English, Chinese, Japanese, Korean, and more
 
 ### Installation
 
 1. Download the latest release from [GitHub Releases](https://github.com/kinghaonan/opensidian/releases)
-2. Extract to your vault's `.obsidian/plugins/opensidian/` folder
+2. Extract to `.obsidian/plugins/opensidian/` in your vault
 3. Enable the plugin in **Settings → Community Plugins → Opensidian**
 
 ### Requirements
@@ -47,37 +46,27 @@ Opensidian is a powerful Obsidian plugin that integrates **OpenCode AI** as an i
 
 ### Quick Start
 
-1. **Configure OpenCode**: The plugin automatically reads your OpenCode configuration from:
-   - Vault root: `opencode.json`
+1. **Configure OpenCode**
+   - Vault config: `opencode.json`
    - Global config: `~/.config/opencode/opencode.json`
+2. **Open the Chat**
+   - Click the 🤖 icon in the left ribbon, or open via Command Palette
+3. **Start Chatting**
+   - Type your request, use `@filename`, attach files if needed
 
-2. **Open Chat Interface**: Click the 🤖 icon in the sidebar or use command palette
+### Features
 
-3. **Start Chatting**: Type your message, reference files with `@filename`, and attach files if needed
+#### Chat Experience
 
-### Main Features
-
-#### Chat Interface
-
-- **Real-time Streaming**: Watch AI responses appear character by character
-- **Streaming Optimizations**: Faster long-task handling with throttled updates and final Markdown render
-- **Thinking Process**: Toggle visibility of AI's reasoning
-- **Model Selection**: Switch between free, paid, or local models
-- **Message History**: Browse and load past conversations
-- **File References**: Use `@filename` to include specific notes in context
-- **Tool Summary**: Selected MCP/Skill tools are displayed with each message
-
-#### Inline Edit
-
-- **Select Text**: Highlight any text in a note
-- **Press Hotkey**: Default `Ctrl+Shift+E` (Cmd+Shift+E on Mac)
-- **Describe Changes**: Tell AI how you want to edit the text
-- **Preview Diff**: See exactly what will change before applying
-- **Accept/Reject**: Choose whether to apply the changes
+- Real-time streaming responses
+- Optimized long-task streaming (throttled updates, final Markdown render)
+- Thinking display toggle
+- Model selection and refresh
+- Tool summary shown with each message
 
 #### MCP Tools
 
-The AI can use these tools to interact with your vault:
+The assistant can call tools such as:
 
 | Tool              | Description                       | Example                           |
 | ----------------- | --------------------------------- | --------------------------------- |
@@ -87,81 +76,58 @@ The AI can use these tools to interact with your vault:
 | `manage_tags`     | Add/remove tags                   | "Tag all TODO notes with #urgent" |
 | `get_vault_stats` | Get vault statistics              | "How many notes do I have?"       |
 
-#### Safety & Permissions
+#### MCP/Skill Picker
 
-Three permission modes to balance convenience and security:
+- Search and filter tools
+- Grouped list with enabled/disabled status
+- Selected tools are shown above the input and in message history
+- Selection acts as a strong hint to the model to use those tools/skills
 
-- **🟢 YOLO Mode**: Auto-execute all tool calls (fastest, least safe)
-- **🟡 Safe Mode** (Recommended): Ask permission for dangerous operations only
-- **🔴 Plan Mode**: Always ask for permission before any operation (maximum control)
+#### Inline Editing
 
-### Settings Overview
+- Highlight text in a note
+- Press `Ctrl+Shift+E` (Mac: `Cmd+Shift+E`)
+- Describe edits, preview diffs, apply or discard
 
-#### Model Settings
+#### Safety Modes
 
-- **Use Free Models**: Enable OpenCode free models (default)
-- **OpenCode Zen API Key**: Add your API key for paid models
-- **OpenCode CLI Path**: Specify path to opencode executable
-- **Local Models**: Configure Ollama or LM Studio integration
-- **CLI Timeout**: Configure request timeout (default: 5 minutes)
+- **YOLO**: Execute without confirmation
+- **Safe** (Recommended): Confirm risky actions only
+- **Plan**: Confirm everything, never auto-run
 
-#### UI Settings
+### Settings
 
-- **Theme**: Auto/Light/Dark mode
-- **Font Size**: Adjust chat font size
-- **Show Thinking Process**: Display AI reasoning
-- **Auto Scroll**: Auto-scroll to new messages
-- **Language**: Choose from supported languages
-
-#### Safety Settings
-
-- **Permission Mode**: Select YOLO/Safe/Plan
-- **Command Blocklist**: Block dangerous bash commands
-- **Excluded Tags**: Prevent AI from accessing sensitive notes
-
-#### Session Management
-
-- **Auto-Generate Titles**: Generate conversation titles
-- **Max History**: Set maximum conversation history
-- **Retention Days**: Auto-delete old conversations
-- **Sync with OpenCode**: Keep sessions in sync
+- Models: Free/paid/local, CLI path, timeout
+- UI: Language, font size, theme, auto-scroll
+- Safety: Permission mode, blocklist, excluded tags
+- History: Retention, max history, title generation
 
 ### Troubleshooting
 
-**"OpenCode CLI not found"**
+**OpenCode CLI not found**
 
-- Verify OpenCode is installed: `opencode --version`
+- Verify `opencode --version`
 - Check CLI path in settings
-- Try "Auto-detect" button
+- Use auto-detect
 
-**"Connection timeout"**
+**Timeouts**
 
-- Increase CLI timeout in settings (Advanced)
-- Clear current conversation history
-- Check network connection for API models
+- Increase CLI timeout
+- Reduce conversation history
 
-**"Plugin not loading"**
+**Plugin not loading**
 
 - Restart Obsidian
-- Disable and re-enable plugin
-- Check console (Ctrl+Shift+I) for errors
+- Disable/enable the plugin
+- Check console for errors
 
 ### Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Development mode (watch)
 npm run dev
-
-# Production build
 npm run build
-
-# Run tests
 npm test
-
-# Lint code
 npm run lint
 ```
 
@@ -172,14 +138,14 @@ npm run lint
 
 ### License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE).
 
 ### Acknowledgments
 
-- [OpenCode](https://opencode.ai/) - AI infrastructure and tool calling
-- [Obsidian](https://obsidian.md/) - The note-taking platform
-- [MCP Protocol](https://modelcontextprotocol.io/) - Tool calling standardization
-- [Claudian](https://github.com/YishenTu/claudian) - Inspiration for AI integration
+- [OpenCode](https://opencode.ai/)
+- [Obsidian](https://obsidian.md/)
+- [MCP Protocol](https://modelcontextprotocol.io/)
+- [Claudian](https://github.com/YishenTu/claudian)
 
 ---
 
@@ -187,172 +153,129 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ### 简介
 
-Opensidian 是一个强大的 Obsidian 插件，将 **OpenCode AI** 集成为您的笔记库智能助手。利用 **模型上下文协议（MCP）**，它为 AI 助手提供安全、可控的笔记访问能力，实现智能内容创建、编辑和管理。
+Opensidian 是一款现代化 Obsidian 插件，把 **OpenCode AI** 直接集成到你的笔记库中。通过 **MCP（模型上下文协议）** 与技能系统，实现安全、可控的读写与智能协作。
 
-### 主要特性
+### 核心亮点
 
-- **🤖 AI 驱动的聊天界面**：支持多种 AI 模型（OpenCode Zen、Ollama、自定义提供商）
-- **🎯 上下文感知智能**：自动包含当前文件内容，支持 `@` 文件引用
-- **✏️ 内联文本编辑**：选择任意文本，描述编辑需求，预览差异视图
-- **🔧 内置 MCP 工具**：完整的笔记库读写、搜索和管理工具集
-- **🧰 MCP/Skill 选择器**：支持搜索与分组，并在聊天中显示工具摘要
-- **🧩 工具调用折叠**：工具调用过多时可折叠，保持对话清爽
-- **🛡️ 安全控制**：三种权限模式（YOLO/安全/计划）配合命令黑名单
-- **🌍 多语言支持**：支持中文、英文、日文、韩文等多种语言
-- **💬 对话历史**：持久化和管理 AI 对话，支持搜索和批量操作
-- **📎 文件附件**：上传文件供 AI 分析（保存到笔记库临时位置）
+- **Obsidian 内置 AI 聊天**
+- **上下文感知**：自动包含当前文件，支持 `@文件名`
+- **内联编辑**：选中文本，描述修改，预览差异后应用
+- **MCP 与 Skills**：读取、写入、搜索、管理笔记库
+- **MCP/Skill 选择器**：搜索、分组、即时选择与提示
+- **工具调用折叠**：长工具链自动折叠
+- **流式优化**：长任务更稳定，结尾再渲染 Markdown
+- **安全模式**：YOLO / 安全 / 计划
+- **多语言界面**
 
 ### 安装
 
 1. 从 [GitHub Releases](https://github.com/kinghaonan/opensidian/releases) 下载最新版本
-2. 解压到笔记库的 `.obsidian/plugins/opensidian/` 目录
-3. 在 **设置 → 社区插件 → Opensidian** 中启用插件
+2. 解压到 `.obsidian/plugins/opensidian/`
+3. 在 **设置 → 社区插件 → Opensidian** 启用
 
-### 系统要求
+### 运行要求
 
-- Obsidian v1.8.9 或更高版本
-- 仅限桌面端（Windows、macOS、Linux）
-- [OpenCode CLI](https://opencode.ai/) 或 OpenCode Zen API 密钥
+- Obsidian v1.8.9+
+- 仅桌面端（Windows/macOS/Linux）
+- [OpenCode CLI](https://opencode.ai/) 或 OpenCode Zen API Key
 
 ### 快速开始
 
-1. **配置 OpenCode**：插件自动读取以下位置的配置：
-   - 笔记库根目录：`opencode.json`
-   - 全局配置：`~/.config/opencode/opencode.json`
+1. **配置 OpenCode**
+   - Vault：`opencode.json`
+   - 全局：`~/.config/opencode/opencode.json`
+2. **打开聊天**
+   - 左侧工具栏 🤖 图标或命令面板
+3. **开始使用**
+   - 输入问题，使用 `@文件名`，可上传附件
 
-2. **打开聊天界面**：点击侧边栏的 🤖 图标或使用命令面板
+### 功能说明
 
-3. **开始对话**：输入消息，使用 `@文件名` 引用文件，按需上传附件
+#### 聊天体验
 
-### 核心功能
-
-#### 聊天界面
-
-- **实时流式响应**：观看 AI 逐字符生成回复
-- **流式优化**：长任务更稳定，结尾再渲染 Markdown
-- **思考过程**：切换显示 AI 的推理过程
-- **模型选择**：在免费、付费或本地模型间切换
-- **消息历史**：浏览和加载历史对话
-- **文件引用**：使用 `@文件名` 将特定笔记纳入上下文
-- **工具摘要**：展示本次选用的 MCP/Skill
-
-#### 内联编辑
-
-- **选择文本**：在任意笔记中高亮文本
-- **按快捷键**：默认 `Ctrl+Shift+E`（Mac 上为 Cmd+Shift+E）
-- **描述修改**：告诉 AI 如何编辑文本
-- **预览差异**：在应用前查看具体变化
-- **接受/拒绝**：选择是否应用更改
+- 实时流式输出
+- 长任务流式优化
+- 思考过程显示
+- 模型切换
+- 工具摘要显示
 
 #### MCP 工具
 
-AI 可以使用以下工具与您的笔记库交互：
+| 工具              | 说明                         | 示例                      |
+| ----------------- | ---------------------------- | ------------------------- |
+| `read_note`       | 读取笔记与 frontmatter       | "读取会议记录"            |
+| `write_note`      | 创建或更新笔记               | "创建一条日记"            |
+| `search_notes`    | 搜索笔记库                   | "查找 Python 相关笔记"    |
+| `manage_tags`     | 管理标签                     | "给 TODO 加 #urgent"      |
+| `get_vault_stats` | 获取笔记库统计               | "我有多少条笔记？"        |
 
-| 工具              | 描述                       | 示例                              |
-| ----------------- | -------------------------- | --------------------------------- |
-| `read_note`       | 读取笔记内容和 frontmatter | "读取我的会议笔记"                |
-| `write_note`      | 创建或更新笔记             | "创建新的日记条目"                |
-| `search_notes`    | 搜索笔记库内容             | "查找所有关于 Python 的笔记"      |
-| `manage_tags`     | 添加/移除标签              | "为所有待办笔记添加 #urgent 标签" |
-| `get_vault_stats` | 获取笔记库统计信息         | "我有多少条笔记？"                |
+#### MCP/Skill 选择器
 
-#### 安全与权限
+- 搜索与筛选
+- 分组展示启用状态
+- 选择后立即显示在输入区与聊天记录
+- 选择即提示模型优先调用
 
-三种权限模式平衡便利性和安全性：
+#### 内联编辑
 
-- **🟢 YOLO 模式**：自动执行所有工具调用（最快，安全性最低）
-- **🟡 安全模式**（推荐）：仅对危险操作请求权限
-- **🔴 计划模式**：任何操作前都请求权限（最大控制）
+- 选中文本
+- 快捷键 `Ctrl+Shift+E`（Mac：`Cmd+Shift+E`）
+- 预览差异并确认
 
-### 设置概述
+#### 安全模式
 
-#### 模型设置
+- **YOLO**：无确认自动执行
+- **安全**（推荐）：危险操作确认
+- **计划**：所有操作需确认
 
-- **使用免费模型**：启用 OpenCode 免费模型（默认）
-- **OpenCode Zen API 密钥**：添加付费模型的 API 密钥
-- **OpenCode CLI 路径**：指定 opencode 可执行文件路径
-- **本地模型**：配置 Ollama 或 LM Studio 集成
-- **CLI 超时**：配置请求超时时间（默认：5 分钟）
+### 设置
 
-#### 界面设置
+- 模型：免费/付费/本地，CLI 路径，超时
+- UI：语言、字号、主题、自动滚动
+- 安全：权限模式、命令黑名单、排除标签
+- 历史：保留天数、最大条数、标题生成
 
-- **主题**：自动/浅色/深色模式
-- **字体大小**：调整聊天字体大小
-- **显示思考过程**：显示 AI 推理
-- **自动滚动**：自动滚动到新消息
-- **语言**：选择支持的语言
+### 常见问题
 
-#### 安全设置
+**找不到 OpenCode CLI**
 
-- **权限模式**：选择 YOLO/安全/计划
-- **命令黑名单**：阻止危险 bash 命令
-- **排除标签**：防止 AI 访问敏感笔记
+- 执行 `opencode --version`
+- 检查设置中的 CLI 路径
+- 使用自动检测
 
-#### 会话管理
+**超时**
 
-- **自动生成标题**：生成对话标题
-- **最大历史**：设置最大对话历史数量
-- **保留天数**：自动删除旧对话
-- **与 OpenCode 同步**：保持会话同步
+- 提高 CLI 超时时间
+- 减少对话历史
 
-### 故障排除
-
-**"找不到 OpenCode CLI"**
-
-- 验证 OpenCode 已安装：`opencode --version`
-- 在设置中检查 CLI 路径
-- 尝试"自动检测"按钮
-
-**"连接超时"**
-
-- 在设置中增加 CLI 超时时间（高级设置）
-- 清空当前对话历史
-- 检查 API 模型的网络连接
-
-**"插件未加载"**
+**插件未加载**
 
 - 重启 Obsidian
-- 禁用并重新启用插件
-- 检查控制台（Ctrl+Shift+I）查看错误
+- 禁用后再启用
+- 查看控制台错误
 
 ### 开发
 
 ```bash
-# 安装依赖
 npm install
-
-# 开发模式（监视）
 npm run dev
-
-# 生产构建
 npm run build
-
-# 运行测试
 npm test
-
-# 代码检查
 npm run lint
 ```
 
 ### 发布
 
 1. 运行 `npm run build`
-2. 将 `release/main.js`、`release/styles.css` 与 `manifest.json` 上传到 GitHub Releases
+2. 将 `release/main.js`、`release/styles.css`、`manifest.json` 上传到 GitHub Releases
 
 ### 许可证
 
-MIT 许可证 - 详见 [LICENSE](LICENSE) 文件。
+MIT License - 详见 [LICENSE](LICENSE)。
 
 ### 致谢
 
-- [OpenCode](https://opencode.ai/) - AI 基础设施和工具调用
-- [Obsidian](https://obsidian.md/) - 笔记平台
-- [MCP 协议](https://modelcontextprotocol.io/) - 工具调用标准化
-- [Claudian](https://github.com/YishenTu/claudian) - AI 集成灵感
-
----
-
-<p align="center">
-  <sub>如果觉得 Opensidian 有用，请在 GitHub 上给它一个 ⭐</sub>
-</p>
-
+- [OpenCode](https://opencode.ai/)
+- [Obsidian](https://obsidian.md/)
+- [MCP 协议](https://modelcontextprotocol.io/)
+- [Claudian](https://github.com/YishenTu/claudian)
