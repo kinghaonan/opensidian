@@ -5,6 +5,10 @@ export interface ChatMessage {
   displayContent?: string;
   timestamp: number;
   images?: ImageAttachment[];
+  toolSummary?: {
+    mcp?: string[];
+    skills?: string[];
+  };
   toolCalls?: ToolCall[];
   thinking?: string;
   isStreaming?: boolean;

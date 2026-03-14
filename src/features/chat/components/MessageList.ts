@@ -76,10 +76,23 @@ export class MessageList {
 
     const avatar = msgEl.createDiv({ cls: 'opensidian-avatar' });
     avatar.innerHTML = '👤';
+    avatar.title = lang === 'zh' ? '用户' : 'User';
 
     const contentContainer = msgEl.createDiv({ cls: 'opensidian-message-container' });
     const contentEl = contentContainer.createDiv({ cls: 'opensidian-message-content' });
-    contentEl.textContent = message.content;
+    contentEl.textContent = message.displayContent || message.content;
+
+    if (message.toolSummary && ((message.toolSummary.mcp?.length || 0) > 0 || (message.toolSummary.skills?.length || 0) > 0)) {
+      const summaryEl = contentContainer.createDiv({ cls: 'opensidian-message-tools' });
+      const summaryTitle = lang === 'zh' ? '本次工具' : 'Tools for this message';
+      summaryEl.createSpan({ cls: 'opensidian-message-tools-title', text: summaryTitle });
+      if (message.toolSummary.mcp && message.toolSummary.mcp.length > 0) {
+        summaryEl.createSpan({ cls: 'opensidian-message-tools-item', text: `MCP: ${message.toolSummary.mcp.join(', ')}` });
+      }
+      if (message.toolSummary.skills && message.toolSummary.skills.length > 0) {
+        summaryEl.createSpan({ cls: 'opensidian-message-tools-item', text: `Skills: ${message.toolSummary.skills.join(', ')}` });
+      }
+    }
 
     this.renderCopyButton(contentContainer, message.content, lang);
 
@@ -99,6 +112,7 @@ export class MessageList {
 
     const avatar = msgEl.createDiv({ cls: 'opensidian-avatar' });
     avatar.innerHTML = '🤖';
+    avatar.title = lang === 'zh' ? 'AI 助手' : 'AI Assistant';
 
     const contentContainer = msgEl.createDiv({ cls: 'opensidian-message-container' });
 
@@ -215,11 +229,16 @@ export class MessageList {
     return contentContainer;
   }
 
-  updateStreamingMessage(container: HTMLElement, content: string, thinking?: string): void {
-    const contentEl = container.querySelector('.opensidian-message-content');
+  updateStreamingMessage(container: HTMLElement, content: string, thinking?: string, finalize = false): void {
+    const contentEl = container.querySelector('.opensidian-message-content') as HTMLElement | null;
     if (contentEl) {
-      contentEl.removeClass('opensidian-streaming');
-      this.renderMarkdown(contentEl as HTMLElement, content);
+      if (finalize) {
+        contentEl.removeClass('opensidian-streaming');
+        this.renderMarkdown(contentEl, content);
+      } else {
+        contentEl.addClass('opensidian-streaming');
+        contentEl.textContent = content;
+      }
     }
 
     if (thinking && this.plugin.settings.showThinking) {
@@ -326,13 +345,11 @@ export class MessageList {
     const lang = this.plugin.settings.language as Language;
     
     // 查找或创建工具调用容器
-    let toolCallsEl = container.querySelector('.opensidian-tool-calls') as HTMLElement;
-    if (!toolCallsEl) {
-      toolCallsEl = container.createDiv({ cls: 'opensidian-tool-calls' });
-    }
+    const toolCallsEl = this.ensureToolCallsContainer(container, lang);
+    const toolCallsList = toolCallsEl.querySelector('.opensidian-tool-calls-list') as HTMLElement;
     
     // 创建单个工具调用元素（添加可折叠支持）
-    const toolEl = toolCallsEl.createDiv({ 
+    const toolEl = toolCallsList.createDiv({ 
       cls: 'opensidian-tool-call collapsed',  // 默认折叠
       attr: { 'data-tool-id': toolCall.id }
     });
@@ -376,6 +393,8 @@ export class MessageList {
       const argsEl = contentEl.createDiv({ cls: 'opensidian-tool-arguments' });
       this.renderToolArguments(argsEl, toolCall.name, toolCall.arguments);
     }
+
+    this.updateToolCallsHeader(toolCallsEl, lang);
     
     this.scrollToBottom();
   }
@@ -429,6 +448,63 @@ export class MessageList {
     }
     
     this.scrollToBottom();
+  }
+
+  private ensureToolCallsContainer(container: HTMLElement, lang: Language): HTMLElement {
+    let toolCallsEl = container.querySelector('.opensidian-tool-calls') as HTMLElement | null;
+    if (!toolCallsEl) {
+      toolCallsEl = container.createDiv({ cls: 'opensidian-tool-calls' });
+      toolCallsEl.dataset.collapsed = 'false';
+      toolCallsEl.dataset.userToggled = 'false';
+
+      const header = toolCallsEl.createDiv({ cls: 'opensidian-tool-calls-header' });
+      header.createSpan({ cls: 'opensidian-tool-calls-title' });
+
+      const toggleBtn = header.createEl('button', {
+        cls: 'opensidian-tool-calls-toggle',
+        text: lang === 'zh' ? '收起' : 'Collapse'
+      });
+      toggleBtn.onclick = () => {
+        toolCallsEl!.dataset.userToggled = 'true';
+        const shouldCollapse = toolCallsEl!.dataset.collapsed !== 'true';
+        this.toggleToolCalls(toolCallsEl as HTMLElement, shouldCollapse, lang);
+      };
+
+      toolCallsEl.createDiv({ cls: 'opensidian-tool-calls-list' });
+    }
+
+    this.updateToolCallsHeader(toolCallsEl, lang);
+    return toolCallsEl;
+  }
+
+  private updateToolCallsHeader(toolCallsEl: HTMLElement, lang: Language): void {
+    const listEl = toolCallsEl.querySelector('.opensidian-tool-calls-list') as HTMLElement | null;
+    const titleEl = toolCallsEl.querySelector('.opensidian-tool-calls-title') as HTMLElement | null;
+    const toggleBtn = toolCallsEl.querySelector('.opensidian-tool-calls-toggle') as HTMLButtonElement | null;
+    const count = listEl ? listEl.children.length : 0;
+
+    if (titleEl) {
+      titleEl.textContent = lang === 'zh' ? `工具调用 (${count})` : `Tool calls (${count})`;
+    }
+
+    if (toolCallsEl.dataset.userToggled !== 'true' && count > 3) {
+      this.toggleToolCalls(toolCallsEl, true, lang);
+    }
+
+    if (toggleBtn) {
+      toggleBtn.textContent = toolCallsEl.dataset.collapsed === 'true'
+        ? (lang === 'zh' ? '展开' : 'Expand')
+        : (lang === 'zh' ? '收起' : 'Collapse');
+    }
+  }
+
+  private toggleToolCalls(toolCallsEl: HTMLElement, collapse: boolean, lang: Language): void {
+    toolCallsEl.dataset.collapsed = collapse ? 'true' : 'false';
+    toolCallsEl.toggleClass('collapsed', collapse);
+    const toggleBtn = toolCallsEl.querySelector('.opensidian-tool-calls-toggle') as HTMLButtonElement | null;
+    if (toggleBtn) {
+      toggleBtn.textContent = collapse ? (lang === 'zh' ? '展开' : 'Expand') : (lang === 'zh' ? '收起' : 'Collapse');
+    }
   }
 
   /**

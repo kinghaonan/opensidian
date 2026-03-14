@@ -36,6 +36,12 @@ export interface ModelInfo {
   outputPrice?: number;
 }
 
+export interface ObsidianCLIConfig {
+  enabled: boolean;
+  vaultPath?: string;
+  configPath?: string;
+}
+
 export interface OpensidianSettings {
   version: string;
   userName: string;
@@ -47,7 +53,7 @@ export interface OpensidianSettings {
   opencodePath?: string;  // OpenCode CLI 路径
   opencodeZenApiKey?: string;  // OpenCode Zen API Key
   tempDir?: string;  // 临时文件目录（避免特殊字符路径问题）
-  disableApiFallback: boolean;  // 禁用API回退（避免CORS错误）
+  disableApiFallback: boolean;  // 禁用 API 回退（避免 CORS 错误）
   
   // Model settings
   model: string;
@@ -98,6 +104,9 @@ export interface OpensidianSettings {
   environmentVariables: string;
   enableDebugMode: boolean;
   cliTimeout: number;  // CLI 超时时间（毫秒）
+  
+  // Obsidian CLI settings
+  obsidianCLI?: ObsidianCLIConfig;  // Obsidian CLI 配置
 }
 
 export const DEFAULT_SETTINGS: OpensidianSettings = {

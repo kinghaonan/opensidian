@@ -184,14 +184,89 @@ export class StorageService {
   }
 
   async loadOpencodeConfig(): Promise<any | null> {
-    // Try to load opencode config from vault root
-    const configPath = 'opencode.json';
+    // Try to load opencode config from vault root or .opencode
+    const configPaths = ['opencode.json', '.opencode/opencode.json'];
     try {
-      const content = await this.plugin.app.vault.adapter.read(configPath);
-      return JSON.parse(content);
+      for (const configPath of configPaths) {
+        const content = await this.plugin.app.vault.adapter.read(configPath);
+        if (content) {
+          return this.parseJsonWithComments(content);
+        }
+      }
     } catch {
       return null;
     }
+  }
+
+  private parseJsonWithComments(content: string): any {
+    const stripped = this.stripJsonComments(content);
+    return JSON.parse(stripped);
+  }
+
+  private stripJsonComments(input: string): string {
+    let output = '';
+    let inString = false;
+    let stringChar = '';
+    let inLineComment = false;
+    let inBlockComment = false;
+    let escape = false;
+
+    for (let i = 0; i < input.length; i++) {
+      const char = input[i];
+      const next = i + 1 < input.length ? input[i + 1] : '';
+
+      if (inLineComment) {
+        if (char === '\n') {
+          inLineComment = false;
+          output += char;
+        }
+        continue;
+      }
+
+      if (inBlockComment) {
+        if (char === '*' && next === '/') {
+          inBlockComment = false;
+          i++;
+        }
+        continue;
+      }
+
+      if (inString) {
+        output += char;
+        if (escape) {
+          escape = false;
+        } else if (char === '\\') {
+          escape = true;
+        } else if (char === stringChar) {
+          inString = false;
+          stringChar = '';
+        }
+        continue;
+      }
+
+      if (char === '"' || char === "'") {
+        inString = true;
+        stringChar = char;
+        output += char;
+        continue;
+      }
+
+      if (char === '/' && next === '/') {
+        inLineComment = true;
+        i++;
+        continue;
+      }
+
+      if (char === '/' && next === '*') {
+        inBlockComment = true;
+        i++;
+        continue;
+      }
+
+      output += char;
+    }
+
+    return output;
   }
 
   async saveCommand(name: string, command: any): Promise<void> {

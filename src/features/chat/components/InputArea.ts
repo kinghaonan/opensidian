@@ -2,6 +2,7 @@ import { Notice } from 'obsidian';
 import OpensidianPlugin from '../../../main';
 import { ImageAttachment } from '../../../core/types/chat';
 import { t, Language } from '../../../i18n';
+import { ToolQuickPicker, QuickToolSelection } from './ToolQuickPicker';
 
 export class InputArea {
   private container: HTMLElement;
@@ -12,9 +13,14 @@ export class InputArea {
   private streamingButtons!: HTMLElement;
   private attachments: ImageAttachment[] = [];
   private attachmentsContainer!: HTMLElement;
+  private selectedToolsContainer!: HTMLElement;
+  private quickPicker!: ToolQuickPicker;
+  private mcpBtn!: HTMLButtonElement;
+  private skillBtn!: HTMLButtonElement;
+  private quickSelectedTools: QuickToolSelection[] = [];
   
-  private onSend?: (message: string, attachments: ImageAttachment[]) => void;
-  private onAppend?: (message: string, attachments: ImageAttachment[]) => void;
+  private onSend?: (message: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]) => void;
+  private onAppend?: (message: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]) => void;
 
   constructor(container: HTMLElement, plugin: OpensidianPlugin) {
     this.container = container;
@@ -22,8 +28,8 @@ export class InputArea {
   }
 
   setCallbacks(callbacks: {
-    onSend?: (message: string, attachments: ImageAttachment[]) => void;
-    onAppend?: (message: string, attachments: ImageAttachment[]) => void;
+    onSend?: (message: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]) => void;
+    onAppend?: (message: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]) => void;
   }): void {
     this.onSend = callbacks.onSend;
     this.onAppend = callbacks.onAppend;
@@ -34,6 +40,10 @@ export class InputArea {
     const lang = this.plugin.settings.language as Language;
 
     this.attachmentsContainer = this.container.createDiv({ cls: 'opensidian-attachments' });
+    this.selectedToolsContainer = this.container.createDiv({ cls: 'opensidian-selected-tools' });
+
+    // 渲染快速选择按钮（删除固定选择器）
+    this.renderQuickPickerButtons(lang);
 
     const inputWrapper = this.container.createDiv({ cls: 'opensidian-input-wrapper' });
 
@@ -50,6 +60,7 @@ export class InputArea {
       attr: { 'aria-label': t('addAttachment', lang) || 'Add attachment' }
     });
     attachBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`;
+    attachBtn.title = lang === 'zh' ? '添加附件' : 'Add attachment';
     attachBtn.onclick = () => this.addAttachment();
   }
 
@@ -82,6 +93,7 @@ export class InputArea {
       cls: 'opensidian-send-btn',
       text: 'Send'
     });
+    this.sendBtn.title = _lang === 'zh' ? '发送消息' : 'Send message';
     this.sendBtn.onclick = () => this.sendMessage();
 
     const streamingButtons = buttonGroup.createDiv({ cls: 'opensidian-streaming-buttons' });
@@ -91,9 +103,45 @@ export class InputArea {
       cls: 'opensidian-append-btn',
       text: 'Add'
     });
+    this.appendBtn.title = _lang === 'zh' ? '追加消息' : 'Append message';
     this.appendBtn.onclick = () => this.appendMessage();
     
     this.streamingButtons = streamingButtons;
+  }
+
+  private renderQuickPickerButtons(lang: Language): void {
+    // 初始化快速选择器
+    this.quickPicker = new ToolQuickPicker(this.plugin);
+    this.quickPicker.setCallback((tools: QuickToolSelection[]) => {
+      this.quickSelectedTools = tools;
+      console.log('Quick selected tools:', this.quickSelectedTools);
+      this.updateSelectedToolsUI();
+    });
+
+    // 创建按钮容器
+    const buttonContainer = this.container.createDiv({ cls: 'opensidian-quick-picker-buttons' });
+
+    // MCP 按钮
+    this.mcpBtn = buttonContainer.createEl('button', {
+      cls: 'opensidian-mcp-btn',
+      text: lang === 'zh' ? '🔧 MCP' : '🔧 MCP'
+    });
+    this.mcpBtn.title = lang === 'zh' ? '选择 MCP 服务器' : 'Select MCP servers';
+    this.mcpBtn.onclick = async (e: MouseEvent) => {
+      e.stopPropagation();
+      await this.quickPicker.show('mcp', this.mcpBtn);
+    };
+
+    // Skill 按钮
+    this.skillBtn = buttonContainer.createEl('button', {
+      cls: 'opensidian-skill-btn',
+      text: lang === 'zh' ? '⚡ Skill' : '⚡ Skill'
+    });
+    this.skillBtn.title = lang === 'zh' ? '选择 Skills' : 'Select skills';
+    this.skillBtn.onclick = async (e: MouseEvent) => {
+      e.stopPropagation();
+      await this.quickPicker.show('skill', this.skillBtn);
+    };
   }
 
   private setupDragAndDrop(): void {
@@ -123,7 +171,8 @@ export class InputArea {
     this.attachments = [];
     this.updateAttachmentsUI();
 
-    this.onSend?.(text, attachmentsToSend);
+    // 只使用快速选择的工具
+    this.onSend?.(text, attachmentsToSend, this.quickSelectedTools);
   }
 
   private appendMessage(): void {
@@ -136,7 +185,8 @@ export class InputArea {
     this.attachments = [];
     this.updateAttachmentsUI();
 
-    this.onAppend?.(text, attachmentsToSend);
+    // 只使用快速选择的工具
+    this.onAppend?.(text, attachmentsToSend, this.quickSelectedTools);
   }
 
   setStreaming(streaming: boolean): void {
@@ -260,6 +310,23 @@ export class InputArea {
         this.attachments = this.attachments.filter(a => a.id !== attachment.id);
         this.updateAttachmentsUI();
       };
+    }
+  }
+
+  private updateSelectedToolsUI(): void {
+    if (!this.selectedToolsContainer) return;
+    this.selectedToolsContainer.empty();
+    if (this.quickSelectedTools.length === 0) return;
+
+    const label = this.selectedToolsContainer.createSpan({ 
+      cls: 'opensidian-selected-tools-label',
+      text: this.plugin.settings.language === 'zh' ? '已选择工具' : 'Selected tools'
+    });
+    label.setAttr('aria-hidden', 'true');
+
+    for (const tool of this.quickSelectedTools) {
+      const chip = this.selectedToolsContainer.createSpan({ cls: 'opensidian-selected-tool' });
+      chip.setText(`${tool.type.toUpperCase()}: ${tool.name}`);
     }
   }
 

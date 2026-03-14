@@ -9,6 +9,7 @@ import { MessageList } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { Sidebar } from './components/Sidebar';
 import { ConnectionManager, StreamBuffer } from '../../core/agent/ConnectionManager';
+import { QuickToolSelection } from './components/ToolQuickPicker';
 
 export const VIEW_TYPE_OPENCODE = 'opensidian-chat-view';
 
@@ -126,8 +127,8 @@ export class OpensidianView extends ItemView {
   private createInputArea(): void {
     this.inputArea = new InputArea(this.inputContainer, this.plugin);
     this.inputArea.setCallbacks({
-      onSend: (msg, attachments) => this.sendMessage(msg, attachments),
-      onAppend: (msg, attachments) => this.appendMessage(msg, attachments),
+      onSend: (msg, attachments, tools) => this.sendMessage(msg, attachments, tools),
+      onAppend: (msg, attachments, tools) => this.appendMessage(msg, attachments, tools),
     });
     this.inputArea.render();
   }
@@ -188,7 +189,7 @@ export class OpensidianView extends ItemView {
     this.messageList.addWelcomeMessage();
   }
 
-  private async sendMessage(text: string, attachments: ImageAttachment[]): Promise<void> {
+  private async sendMessage(text: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]): Promise<void> {
     if (this.isStreaming) return;
     
     const lang = this.plugin.settings.language;
@@ -202,6 +203,7 @@ export class OpensidianView extends ItemView {
     }
 
     let messageContent = text;
+    let displayContent = text;
     if (attachments.length > 0) {
       const attachmentList = attachments
         .map(att => `- ${att.fileName || 'file'}`)
@@ -210,14 +212,29 @@ export class OpensidianView extends ItemView {
       messageContent = lang === 'zh'
         ? `用户上传了以下附件：\n${attachmentList}\n\n用户的问题：\n${text}`
         : `User uploaded attachments:\n${attachmentList}\n\nUser's question:\n${text}`;
+      displayContent = messageContent;
+    }
+
+    if (tools && tools.length > 0) {
+      const mcpTools = tools.filter(t => t.type === 'mcp').map(t => t.name);
+      const skillTools = tools.filter(t => t.type === 'skill').map(t => t.name);
+      const toolHint = lang === 'zh'
+        ? `\n\n[已选择工具]\n${mcpTools.length ? `MCP: ${mcpTools.join(', ')}\n` : ''}${skillTools.length ? `Skills: ${skillTools.join(', ')}` : ''}\n请优先使用这些工具。`
+        : `\n\n[Selected tools]\n${mcpTools.length ? `MCP: ${mcpTools.join(', ')}\n` : ''}${skillTools.length ? `Skills: ${skillTools.join(', ')}` : ''}\nPlease prioritize using these tools.`;
+      messageContent += toolHint;
     }
 
     const userMessage: ChatMessage = {
       id: this.generateId(),
       role: 'user',
       content: messageContent,
+      displayContent,
       timestamp: Date.now(),
-      images: attachments.length > 0 ? attachments : undefined
+      images: attachments.length > 0 ? attachments : undefined,
+      toolSummary: tools && tools.length > 0 ? {
+        mcp: tools.filter(t => t.type === 'mcp').map(t => t.name),
+        skills: tools.filter(t => t.type === 'skill').map(t => t.name)
+      } : undefined
     };
 
     this.messages.push(userMessage);
@@ -236,14 +253,14 @@ export class OpensidianView extends ItemView {
 
     try {
       const conversationHistory = this.messages.slice(0, -1);
-      const systemPrompt = this.buildSystemPrompt(context);
+      const systemPrompt = this.buildSystemPrompt(context, tools);
 
       this.streamBuffer = new StreamBuffer((content, thinking) => {
         if (content) fullContent += content;
         if (thinking) thinkingContent += thinking;
-        this.messageList.updateStreamingMessage(assistantContainer, fullContent, thinkingContent);
+        this.messageList.updateStreamingMessage(assistantContainer, fullContent, thinkingContent, false);
         this.messageList.updateThinking(assistantContainer, thinkingContent);
-      });
+      }, { flushInterval: 120, maxBufferSize: 2000 });
 
       const stream = this.plugin.openCodeService.query(messageContent, {
         conversationHistory,
@@ -268,11 +285,12 @@ export class OpensidianView extends ItemView {
           this.messageList.showErrorMessage(assistantContainer, chunk.error || t('error', lang));
           break;
         } else if (chunk.type === 'done') {
-          this.streamBuffer.flush();
+          this.streamBuffer.flush(true);
           break;
         }
       }
 
+      this.messageList.updateStreamingMessage(assistantContainer, fullContent, thinkingContent, true);
       const assistantMessage: ChatMessage = {
         id: assistantMsgId,
         role: 'assistant',
@@ -304,11 +322,12 @@ export class OpensidianView extends ItemView {
     new Notice(t('requestCancelled', this.plugin.settings.language));
   }
 
-  private async appendMessage(text: string, attachments: ImageAttachment[]): Promise<void> {
+  private async appendMessage(text: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]): Promise<void> {
     if (!this.isStreaming) return;
     
     const lang = this.plugin.settings.language;
     let messageContent = text;
+    let displayContent = text;
     
     if (attachments.length > 0) {
       const attachmentList = attachments
@@ -318,14 +337,20 @@ export class OpensidianView extends ItemView {
       messageContent = lang === 'zh'
         ? `用户上传了以下附件：\n${attachmentList}\n\n用户的问题：\n${text}`
         : `User uploaded attachments:\n${attachmentList}\n\nUser's question:\n${text}`;
+      displayContent = messageContent;
     }
     
     const userMessage: ChatMessage = {
       id: this.generateId(),
       role: 'user',
       content: messageContent,
+      displayContent,
       timestamp: Date.now(),
-      images: attachments.length > 0 ? attachments : undefined
+      images: attachments.length > 0 ? attachments : undefined,
+      toolSummary: tools && tools.length > 0 ? {
+        mcp: tools.filter(t => t.type === 'mcp').map(t => t.name),
+        skills: tools.filter(t => t.type === 'skill').map(t => t.name)
+      } : undefined
     };
     
     this.messages.push(userMessage);
@@ -333,7 +358,7 @@ export class OpensidianView extends ItemView {
     
     const context = await this.prepareContext(text);
     const conversationHistory = this.messages.slice(0, -1);
-    const systemPrompt = this.buildSystemPrompt(context);
+    const systemPrompt = this.buildSystemPrompt(context, tools);
     
     try {
       const stream = this.plugin.openCodeService.query(messageContent, {
@@ -351,7 +376,7 @@ export class OpensidianView extends ItemView {
       for await (const chunk of stream) {
         if (chunk.type === 'text' && chunk.content) {
           fullContent += chunk.content;
-          this.messageList.updateStreamingMessage(assistantContainer, fullContent);
+          this.messageList.updateStreamingMessage(assistantContainer, fullContent, thinkingContent, false);
         } else if (chunk.type === 'thinking' && chunk.content) {
           thinkingContent += chunk.content;
           this.messageList.updateThinking(assistantContainer, thinkingContent);
@@ -366,6 +391,8 @@ export class OpensidianView extends ItemView {
           break;
         }
       }
+
+      this.messageList.updateStreamingMessage(assistantContainer, fullContent, thinkingContent, true);
       
       const assistantMessage: ChatMessage = {
         id: this.generateId(),
@@ -421,7 +448,7 @@ export class OpensidianView extends ItemView {
     return context;
   }
 
-  private buildSystemPrompt(context: any): string {
+  private buildSystemPrompt(context: any, tools?: QuickToolSelection[]): string {
     const lang = this.plugin.settings.language;
     let prompt = lang === 'zh'
       ? '你是一个帮助管理 Obsidian 笔记库的 AI 助手。你可以访问笔记库内容，读取、写入和编辑笔记。请提供有帮助、简洁且准确的回答。\n\n'
@@ -450,6 +477,30 @@ export class OpensidianView extends ItemView {
       prompt += lang === 'zh' 
         ? `当前文件：${context.activeFile.path}\n` 
         : `Active file: ${context.activeFile.path}\n`;
+    }
+
+    if (tools && tools.length > 0) {
+      const mcpTools = tools.filter(t => t.type === 'mcp').map(t => t.name);
+      const skillTools = tools.filter(t => t.type === 'skill').map(t => t.name);
+      if (lang === 'zh') {
+        prompt += `\n用户已选择工具，请优先使用这些工具来完成任务。\n`;
+        if (mcpTools.length > 0) {
+          prompt += `MCP：${mcpTools.join(', ')}\n`;
+        }
+        if (skillTools.length > 0) {
+          prompt += `Skills：${skillTools.join(', ')}\n`;
+        }
+        prompt += `如果任务适合调用技能，请主动调用已选择的 skill。\n\n`;
+      } else {
+        prompt += `\nUser selected tools. Prefer using these tools to complete the task.\n`;
+        if (mcpTools.length > 0) {
+          prompt += `MCP: ${mcpTools.join(', ')}\n`;
+        }
+        if (skillTools.length > 0) {
+          prompt += `Skills: ${skillTools.join(', ')}\n`;
+        }
+        prompt += `If a task fits a skill, proactively call the selected skill.\n\n`;
+      }
     }
 
     if (this.plugin.settings.customSystemPrompt) {

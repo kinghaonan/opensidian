@@ -1,5 +1,6 @@
 import OpensidianPlugin from '../../main';
 import { MCPServerConfig } from '../types/opencode';
+import { registerCLITools } from './tools/CLITools';
 
 interface MCPServer {
   name: string;
@@ -49,6 +50,18 @@ export class McpServerManager {
       contextSaving: false,
       tools: [], // Will be populated by the internal server
     });
+
+    // Register Obsidian CLI tools if available
+    if (this.plugin.obsidianCLI && this.plugin.obsidianCLI.isAvailable()) {
+      console.log('✅ Registering Obsidian CLI MCP tools');
+      try {
+        // Note: We can't directly register tools to the internal server here
+        // The tools will be registered when the internal MCP server is initialized
+        registerCLITools(null as any, this.plugin);
+      } catch (error) {
+        console.error('Failed to register CLI tools:', error);
+      }
+    }
   }
 
   private async loadExternalServers(): Promise<void> {

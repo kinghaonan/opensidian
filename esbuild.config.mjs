@@ -24,7 +24,7 @@ if (!fs.existsSync(outdir)) {
 
 // Copy manifest.json and other files to output directory
 function copyFiles() {
-	const filesToCopy = ['manifest.json', 'styles.css'];
+	const filesToCopy = ['manifest.json'];
 	for (const file of filesToCopy) {
 		const src = path.join(__dirname, file);
 		const dest = path.join(outdir, file);
@@ -32,6 +32,14 @@ function copyFiles() {
 			fs.copyFileSync(src, dest);
 			console.log(`Copied ${file} to ${outdir}`);
 		}
+	}
+	
+	// Rename main.css to styles.css if it exists
+	const mainCss = path.join(outdir, 'main.css');
+	const stylesCss = path.join(outdir, 'styles.css');
+	if (fs.existsSync(mainCss)) {
+		fs.renameSync(mainCss, stylesCss);
+		console.log(`Renamed main.css to styles.css`);
 	}
 }
 

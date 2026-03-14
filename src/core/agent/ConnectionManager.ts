@@ -240,11 +240,17 @@ export class StreamBuffer {
   private buffer: string = '';
   private thinkingBuffer: string = '';
   private lastFlushTime: number = 0;
-  private flushInterval: number = 50; // 50ms 刷新间隔
+  private flushInterval: number = 120; // 120ms 刷新间隔
+  private maxBufferSize: number = 2000;
   private onFlush?: (content: string, thinking: string) => void;
 
-  constructor(onFlush?: (content: string, thinking: string) => void) {
+  constructor(
+    onFlush?: (content: string, thinking: string) => void,
+    options?: { flushInterval?: number; maxBufferSize?: number }
+  ) {
     this.onFlush = onFlush;
+    if (options?.flushInterval) this.flushInterval = options.flushInterval;
+    if (options?.maxBufferSize) this.maxBufferSize = options.maxBufferSize;
   }
 
   /**
@@ -268,7 +274,10 @@ export class StreamBuffer {
    */
   private maybeFlush(): void {
     const now = Date.now();
-    if (now - this.lastFlushTime >= this.flushInterval) {
+    if (
+      now - this.lastFlushTime >= this.flushInterval ||
+      this.buffer.length + this.thinkingBuffer.length >= this.maxBufferSize
+    ) {
       this.flush();
     }
   }
@@ -276,12 +285,14 @@ export class StreamBuffer {
   /**
    * 强制刷新
    */
-  flush(): void {
+  flush(force = false): void {
     if (this.buffer || this.thinkingBuffer) {
       this.onFlush?.(this.buffer, this.thinkingBuffer);
       this.buffer = '';
       this.thinkingBuffer = '';
       this.lastFlushTime = Date.now();
+    } else if (force) {
+      this.onFlush?.('', '');
     }
   }
 

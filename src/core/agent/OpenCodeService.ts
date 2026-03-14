@@ -36,7 +36,8 @@ export class OpenCodeService {
   private currentSessionId: string | null = null;
   private availableModels: ModelInfo[] = [];
   private opencodePath: string | null = null;
-
+  private availableMCPServers: Array<{name: string; description?: string; enabled: boolean}> = [];
+  private availableSkills: Array<{name: string; description?: string; enabled: boolean}> = [];
   constructor(plugin: OpensidianPlugin) {
     this.plugin = plugin;
   }
@@ -74,6 +75,10 @@ export class OpenCodeService {
 
     // Load available models
     await this.loadAvailableModels();
+    
+    // Load available MCP servers and skills
+    await this.loadAvailableMCPServers();
+    await this.loadAvailableSkills();
 
     this.isInitialized = true;
     console.log('OpenCode service initialized');
@@ -130,16 +135,67 @@ export class OpenCodeService {
   public async findOpenCodePath(): Promise<void> {
     // Use configured path first
     if (this.plugin.settings.opencodePath) {
-      this.opencodePath = this.plugin.settings.opencodePath;
+      this.opencodePath = this.plugin.settings.opencodePath.replace(/\r/g, '').trim();
       return;
     }
 
+    // Try using PATH first (fast and reliable)
+    try {
+      const cmd = process.platform === 'win32' ? 'where opencode' : 'which opencode';
+      const { stdout } = await execAsync(cmd);
+      const foundPath = stdout.trim().split('\n')[0]?.replace(/["\r\n]+/g, '').trim();
+      if (foundPath) {
+        this.opencodePath = foundPath;
+        console.log('Found opencode via PATH:', foundPath);
+        return;
+      }
+    } catch {
+      console.warn('OpenCode CLI not found in PATH');
+    }
+
     // Try to find opencode in common locations
-    const possiblePaths = [
-      'H:\\node-v22.20.0-win-x64\\node-v22.20.0-win-x64\\opencode.cmd',
-      'H:\\node-v22.20.0-win-x64\\node-v22.20.0-win-x64\\opencode',
-      process.platform === 'win32' ? 'opencode.cmd' : 'opencode',
-    ];
+    const possiblePaths: string[] = [];
+    const appData = process.env.APPDATA;
+    const localAppData = process.env.LOCALAPPDATA;
+    const programFiles = process.env.ProgramFiles;
+    const programFilesX86 = process.env['ProgramFiles(x86)'];
+
+    if (process.platform === 'win32') {
+      if (appData) {
+        possiblePaths.push(
+          path.join(appData, 'npm', 'opencode.cmd'),
+          path.join(appData, 'npm', 'opencode')
+        );
+      }
+      if (localAppData) {
+        possiblePaths.push(
+          path.join(localAppData, 'Programs', 'nodejs', 'opencode.cmd'),
+          path.join(localAppData, 'Programs', 'nodejs', 'opencode')
+        );
+      }
+      if (programFiles) {
+        possiblePaths.push(
+          path.join(programFiles, 'nodejs', 'opencode.cmd'),
+          path.join(programFiles, 'nodejs', 'opencode')
+        );
+      }
+      if (programFilesX86) {
+        possiblePaths.push(
+          path.join(programFilesX86, 'nodejs', 'opencode.cmd'),
+          path.join(programFilesX86, 'nodejs', 'opencode')
+        );
+      }
+      possiblePaths.push(
+        path.join(process.cwd(), 'opencode.cmd'),
+        path.join(process.cwd(), 'opencode')
+      );
+    } else {
+      possiblePaths.push(
+        '/usr/local/bin/opencode',
+        '/usr/bin/opencode',
+        path.join(process.cwd(), 'opencode')
+      );
+    }
 
     for (const p of possiblePaths) {
       try {
@@ -153,18 +209,6 @@ export class OpenCodeService {
       }
     }
 
-    // Try using 'which' or 'where' command
-    try {
-      const cmd = process.platform === 'win32' ? 'where opencode' : 'which opencode';
-      const { stdout } = await execAsync(cmd);
-      const foundPath = stdout.trim().split('\n')[0];
-      if (foundPath) {
-        this.opencodePath = foundPath;
-        console.log('Found opencode via PATH:', foundPath);
-      }
-    } catch {
-      console.warn('OpenCode CLI not found in PATH');
-    }
   }
 
   private async loadOpencodeConfig(): Promise<void> {
@@ -172,20 +216,26 @@ export class OpenCodeService {
       // 1. Try vault-specific config first
       const vaultConfig = await this.plugin.storage.loadOpencodeConfig();
       if (vaultConfig) {
-        this.opencodeConfig = vaultConfig;
         console.log('Loaded opencode config from vault');
-        return;
       }
 
       // 2. Try global config
-      const globalConfigPath = this.getGlobalConfigPath();
+      let globalConfig: OpenCodeConfig | null = null;
+      const customPath = this.plugin.settings.opencodeConfigPath;
+      const globalConfigPath = customPath || this.getGlobalConfigPath();
       if (globalConfigPath && fs.existsSync(globalConfigPath)) {
         const content = fs.readFileSync(globalConfigPath, 'utf-8');
-        this.opencodeConfig = JSON.parse(content);
+        globalConfig = this.parseJsonWithComments(content);
         console.log('Loaded opencode config from global');
       }
 
-      // 3. Try to load auth info
+      if (globalConfig && vaultConfig) {
+        this.opencodeConfig = this.mergeConfigs(globalConfig, vaultConfig);
+      } else {
+        this.opencodeConfig = vaultConfig || globalConfig;
+      }
+
+      // 3. Try to load auth info (always)
       await this.loadAuthConfig();
     } catch (error) {
       console.error('Failed to load opencode config:', error);
@@ -208,16 +258,31 @@ export class OpenCodeService {
   private getGlobalConfigPath(): string | null {
     const homeDir = process.env.HOME || process.env.USERPROFILE;
     if (!homeDir) return null;
-    return path.join(homeDir, '.config', 'opencode', 'opencode.json');
+    const appData = process.env.APPDATA;
+    const localAppData = process.env.LOCALAPPDATA;
+    const locations = [
+      path.join(homeDir, '.config', 'opencode', 'opencode.json'),
+      appData ? path.join(appData, 'opencode', 'opencode.json') : null,
+      localAppData ? path.join(localAppData, 'opencode', 'opencode.json') : null,
+    ].filter(Boolean) as string[];
+
+    for (const loc of locations) {
+      if (fs.existsSync(loc)) return loc;
+    }
+    return locations[0] || null;
   }
 
   private getAuthPath(): string | null {
     const homeDir = process.env.HOME || process.env.USERPROFILE;
     if (!homeDir) return null;
     
+    const appData = process.env.APPDATA;
+    const localAppData = process.env.LOCALAPPDATA;
     const locations = [
       path.join(homeDir, '.local', 'share', 'opencode', 'auth.json'),
       path.join(homeDir, '.config', 'opencode', 'auth.json'),
+      appData ? path.join(appData, 'opencode', 'auth.json') : null,
+      localAppData ? path.join(localAppData, 'opencode', 'auth.json') : null,
     ];
     
     for (const loc of locations) {
@@ -229,7 +294,110 @@ export class OpenCodeService {
   private getSessionsPath(): string | null {
     const homeDir = process.env.HOME || process.env.USERPROFILE;
     if (!homeDir) return null;
-    return path.join(homeDir, '.local', 'share', 'opencode', 'sessions');
+    const appData = process.env.APPDATA;
+    const localAppData = process.env.LOCALAPPDATA;
+    const locations = [
+      path.join(homeDir, '.local', 'share', 'opencode', 'sessions'),
+      path.join(homeDir, '.config', 'opencode', 'sessions'),
+      appData ? path.join(appData, 'opencode', 'sessions') : null,
+      localAppData ? path.join(localAppData, 'opencode', 'sessions') : null,
+    ].filter(Boolean) as string[];
+
+    for (const loc of locations) {
+      if (fs.existsSync(loc)) return loc;
+    }
+    return locations[0] || null;
+  }
+
+  private parseJsonWithComments(content: string): any {
+    const stripped = this.stripJsonComments(content);
+    return JSON.parse(stripped);
+  }
+
+  private stripJsonComments(input: string): string {
+    let output = '';
+    let inString = false;
+    let stringChar = '';
+    let inLineComment = false;
+    let inBlockComment = false;
+    let escape = false;
+
+    for (let i = 0; i < input.length; i++) {
+      const char = input[i];
+      const next = i + 1 < input.length ? input[i + 1] : '';
+
+      if (inLineComment) {
+        if (char === '\n') {
+          inLineComment = false;
+          output += char;
+        }
+        continue;
+      }
+
+      if (inBlockComment) {
+        if (char === '*' && next === '/') {
+          inBlockComment = false;
+          i++;
+        }
+        continue;
+      }
+
+      if (inString) {
+        output += char;
+        if (escape) {
+          escape = false;
+        } else if (char === '\\') {
+          escape = true;
+        } else if (char === stringChar) {
+          inString = false;
+          stringChar = '';
+        }
+        continue;
+      }
+
+      if (char === '"' || char === "'") {
+        inString = true;
+        stringChar = char;
+        output += char;
+        continue;
+      }
+
+      if (char === '/' && next === '/') {
+        inLineComment = true;
+        i++;
+        continue;
+      }
+
+      if (char === '/' && next === '*') {
+        inBlockComment = true;
+        i++;
+        continue;
+      }
+
+      output += char;
+    }
+
+    return output;
+  }
+
+  private mergeConfigs(base: any, override: any): any {
+    if (!base) return override;
+    if (!override) return base;
+    if (Array.isArray(base) || Array.isArray(override)) {
+      return override ?? base;
+    }
+    if (typeof base !== 'object' || typeof override !== 'object') {
+      return override;
+    }
+    const result: any = { ...base };
+    for (const [key, value] of Object.entries(override)) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        result[key] = this.mergeConfigs((base as any)[key], value);
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
   }
 
   private async setupProvider(): Promise<void> {
@@ -335,33 +503,37 @@ export class OpenCodeService {
   async loadAvailableModels(): Promise<ModelInfo[]> {
     this.availableModels = [];
 
-    // 优先从 OpenCode CLI 获取模型列表
-    let cliModels: ModelInfo[] = [];
+    // 1. Add free models
+    this.availableModels.push(...FREE_MODELS);
+
+    // 2. Add Zen models if user has API key
+    if (this.plugin.settings.opencodeZenApiKey || this.opencodeAuth?.['opencode']) {
+      this.availableModels.push(...ZEN_MODELS);
+    }
+
+    // 3. Add models from OpenCode config (if available)
+    const configModels = this.getModelsFromConfig();
+    for (const model of configModels) {
+      if (!this.availableModels.find(m => m.id === model.id)) {
+        this.availableModels.push(model);
+      }
+    }
+
+    // 4. Try to load models from OpenCode CLI
     if (this.opencodePath) {
       try {
-        cliModels = await this.getModelsFromCLI();
-        if (cliModels.length > 0) {
-          console.log(`Loaded ${cliModels.length} models from OpenCode CLI`);
-          this.availableModels.push(...cliModels);
+        const cliModels = await this.getModelsFromCLI();
+        for (const model of cliModels) {
+          if (!this.availableModels.find(m => m.id === model.id)) {
+            this.availableModels.push(model);
+          }
         }
       } catch (error) {
         console.warn('Failed to load models from CLI:', error);
       }
     }
 
-    // 如果 CLI 没有返回模型，才使用硬编码的免费模型作为后备
-    if (this.availableModels.length === 0) {
-      console.warn('No models from CLI, using hardcoded fallback models');
-      // 添加免费模型作为后备
-      this.availableModels.push(...FREE_MODELS);
-      
-      // 如果用户有 API key，添加 Zen 模型
-      if (this.plugin.settings.opencodeZenApiKey || this.opencodeAuth?.['opencode']) {
-        this.availableModels.push(...ZEN_MODELS);
-      }
-    }
-
-    // 添加本地模型（如果启用）
+    // 5. Add local models if enabled
     if (this.plugin.settings.localModel.enabled) {
       this.availableModels.push({
         id: `local/${this.plugin.settings.localModel.model}`,
@@ -370,7 +542,7 @@ export class OpenCodeService {
       });
     }
 
-    console.log(`Loaded ${this.availableModels.length} available models total`);
+    console.log(`Loaded ${this.availableModels.length} available models`);
     return this.availableModels;
   }
 
@@ -378,21 +550,62 @@ export class OpenCodeService {
     if (!this.opencodePath) return [];
 
     try {
-      const { stdout } = await execAsync(`"${this.opencodePath}" models --format json 2>/dev/null || "${this.opencodePath}" models`);
+      const isWindows = process.platform === 'win32';
+      const commands = isWindows ? [
+        `"${this.opencodePath}" models --format json 2>NUL`,
+        `"${this.opencodePath}" models 2>NUL`
+      ] : [
+        `"${this.opencodePath}" models --format json 2>/dev/null`,
+        `"${this.opencodePath}" models 2>/dev/null`
+      ];
+
+      let output = '';
+      for (const cmd of commands) {
+        try {
+          const result = await execAsync(cmd, { 
+            maxBuffer: 10 * 1024 * 1024,
+            timeout: this.plugin.settings.cliTimeout || 300000,
+            cwd: this.getCliCwd(),
+          });
+          output = result.stdout || result.stderr || '';
+          if (output.trim()) break;
+        } catch {
+          continue;
+        }
+      }
+
+      if (!output) {
+        return [];
+      }
       
       // Try to parse as JSON first
       try {
-        const models = JSON.parse(stdout);
-        if (Array.isArray(models)) {
-          return models.map((m: any) => ({
-            id: m.id || `${m.provider}/${m.name}`,
-            name: m.name || m.id,
-            provider: m.provider || 'unknown',
-          }));
+        const models = JSON.parse(output);
+        const list = Array.isArray(models)
+          ? models
+          : Array.isArray(models?.data)
+            ? models.data
+            : Array.isArray(models?.models)
+              ? models.models
+              : [];
+
+        if (Array.isArray(list) && list.length > 0) {
+          const models: ModelInfo[] = [];
+          for (const m of list) {
+            const rawId = m.id || (m.provider && m.name ? `${m.provider}/${m.name}` : m.name);
+            if (!rawId) continue;
+            const provider = m.provider || rawId.split('/')[0] || 'unknown';
+            models.push({
+              id: rawId,
+              name: m.name || m.id || rawId,
+              provider: provider || 'unknown',
+            });
+          }
+          return models;
         }
       } catch {
         // Parse text output
-        const lines = stdout.trim().split('\n');
+        const lines = output.trim().split('\n');
         const models: ModelInfo[] = [];
         for (const line of lines) {
           const match = line.match(/(\S+\/\S+)/);
@@ -413,8 +626,69 @@ export class OpenCodeService {
     return [];
   }
 
+  private getModelsFromConfig(): ModelInfo[] {
+    const models: ModelInfo[] = [];
+    if (!this.opencodeConfig) return models;
+
+    const providers = this.opencodeConfig.provider || {};
+    const modelIds = new Set<string>();
+    if (this.opencodeConfig.model) modelIds.add(this.opencodeConfig.model);
+    if (this.opencodeConfig.small_model) modelIds.add(this.opencodeConfig.small_model);
+
+    for (const id of modelIds) {
+      if (!id) continue;
+      let normalizedId = id;
+      let provider = 'unknown';
+      let name = id;
+
+      if (id.includes('/')) {
+        const parts = id.split('/');
+        provider = parts[0] || 'unknown';
+        name = parts[1] || id;
+      } else {
+        for (const [providerId, providerConfig] of Object.entries(providers)) {
+          if (providerConfig?.models && providerConfig.models[id]) {
+            normalizedId = `${providerId}/${id}`;
+            provider = providerId || 'unknown';
+            name = providerConfig.models[id]?.name || id;
+            break;
+          }
+        }
+      }
+
+      models.push({
+        id: normalizedId,
+        name,
+        provider,
+      });
+    }
+
+    for (const [providerId, providerConfig] of Object.entries(providers)) {
+      const providerModels = providerConfig?.models || {};
+      for (const [modelKey, modelConfig] of Object.entries(providerModels)) {
+        const rawId = modelConfig?.id || modelKey;
+        const fullId = rawId.includes('/') ? rawId : `${providerId}/${rawId}`;
+        models.push({
+          id: fullId,
+          name: modelConfig?.name || rawId,
+          provider: providerId || 'unknown',
+        });
+      }
+    }
+
+    return models;
+  }
+
   getAvailableModels(): ModelInfo[] {
     return this.availableModels;
+  }
+
+  getAvailableMCPServers(): Array<{name: string; description?: string; enabled: boolean}> {
+    return this.availableMCPServers;
+  }
+
+  getAvailableSkills(): Array<{name: string; description?: string; enabled: boolean}> {
+    return this.availableSkills;
   }
 
   getActiveModel(): string {
@@ -830,26 +1104,9 @@ export class OpenCodeService {
             // 处理错误事件
             if (event.type === 'error') {
               console.error('CLI error event:', event);
-              
-              // 提取错误消息，处理可能的嵌套结构
-              let errorMessage = 'CLI error';
-              if (event.error) {
-                if (typeof event.error === 'string') {
-                  errorMessage = event.error;
-                } else if (event.error.data?.message) {
-                  // 处理嵌套结构：{ name: 'UnknownError', data: { message: '...' } }
-                  errorMessage = event.error.data.message;
-                } else if (event.error.message) {
-                  errorMessage = event.error.message;
-                } else {
-                  // 其他对象，尝试 JSON 化
-                  errorMessage = JSON.stringify(event.error);
-                }
-              }
-              
               yield {
                 type: 'error',
-                error: errorMessage
+                error: event.error?.message || event.error || 'CLI error'
               };
               return;
             }
@@ -1979,5 +2236,400 @@ export class OpenCodeService {
 
   getOpenCodePath(): string | null {
     return this.opencodePath;
+  }
+
+  /**
+   * Load available MCP servers from opencode CLI
+   */
+  private async loadAvailableMCPServers(): Promise<void> {
+    const servers: Array<{name: string; description?: string; enabled: boolean}> = [];
+
+    // 1) Load from config if available
+    const configAny = this.opencodeConfig as any;
+    const mcpConfig = configAny?.mcp || configAny?.mcpServers || configAny?.mcp_servers || configAny?.mcps;
+    if (mcpConfig) {
+      if (Array.isArray(mcpConfig)) {
+        for (const item of mcpConfig) {
+          if (item && item.name) {
+            servers.push({
+              name: String(item.name),
+              description: item.description,
+              enabled: item.enabled !== false
+            });
+          }
+        }
+      } else {
+        for (const [name, config] of Object.entries(mcpConfig)) {
+          const desc = (config as any)?.type === 'remote'
+            ? ((config as any)?.url || 'Remote MCP server')
+            : ((config as any)?.command?.join(' ') || 'Local MCP server');
+          servers.push({
+            name,
+            description: desc,
+            enabled: (config as any)?.enabled !== false
+          });
+        }
+      }
+    }
+
+    if (this.opencodePath) {
+      try {
+        // Try different command formats for Windows and Unix
+        const isWindows = process.platform === 'win32';
+        let stdout = '';
+
+      const commands = isWindows ? [
+        `"${this.opencodePath}" mcp list --format json 2>NUL`,
+        `"${this.opencodePath}" mcp list 2>NUL`,
+        `"${this.opencodePath}" mcp ls 2>NUL`,
+        `"${this.opencodePath}" mcps list 2>NUL`
+      ] : [
+        `"${this.opencodePath}" mcp list --format json 2>/dev/null`,
+        `"${this.opencodePath}" mcp list 2>/dev/null`,
+        `"${this.opencodePath}" mcp ls 2>/dev/null`,
+        `"${this.opencodePath}" mcps list 2>/dev/null`
+      ];
+
+        console.log('[OpenCode] Trying MCP commands:', commands);
+
+        for (const cmd of commands) {
+          try {
+            console.log('[OpenCode] Executing MCP command:', cmd);
+            const result = await execAsync(cmd, { 
+              maxBuffer: 10 * 1024 * 1024,
+              timeout: this.plugin.settings.cliTimeout || 300000,
+              cwd: this.getCliCwd(),
+            });
+            stdout = result.stdout || result.stderr || '';
+            console.log('[OpenCode] Successfully executed MCP command');
+            if (stdout.trim()) break;
+          } catch (error) {
+            console.warn('[OpenCode] MCP command failed:', cmd, error);
+            continue;
+          }
+        }
+
+        // Try to parse as JSON first
+        try {
+          const parsed = JSON.parse(stdout);
+          if (Array.isArray(parsed)) {
+            const cliServers = parsed.map((s: any) => ({
+              name: this.cleanCliText(s.name || s.id || ''),
+              description: this.cleanCliText(s.description || s.name || ''),
+              enabled: s.enabled !== false
+            }));
+            for (const s of cliServers) {
+              if (!servers.find(existing => existing.name === s.name)) {
+                servers.push(s);
+              }
+            }
+            console.log(`[OpenCode] Loaded ${cliServers.length} MCP servers from CLI`);
+          }
+        } catch {
+          // Parse text output
+          const lines = stdout.trim().split('\n');
+          const cliServers: Array<{name: string; description?: string; enabled: boolean}> = [];
+          for (const line of lines) {
+            const parsedLine = this.parseToolListLineV2(line);
+            if (parsedLine) {
+              cliServers.push({
+                name: parsedLine.name,
+                description: parsedLine.description || parsedLine.name,
+                enabled: true
+              });
+            }
+          }
+          for (const s of cliServers) {
+            if (!servers.find(existing => existing.name === s.name)) {
+              servers.push(s);
+            }
+          }
+          if (cliServers.length > 0) {
+            console.log(`[OpenCode] Loaded ${cliServers.length} MCP servers from text output`);
+          }
+        }
+
+      } catch (error) {
+        console.warn('[OpenCode] Failed to load MCP servers from CLI:', error);
+      }
+    }
+
+    if (servers.length === 0) {
+      console.log('No MCP servers detected, using default MCP servers');
+      servers.push(...this.getDefaultMCPServers());
+    }
+
+    this.availableMCPServers = servers;
+  }
+
+  /**
+   * Get default MCP servers
+   */
+  private getDefaultMCPServers(): Array<{name: string; description?: string; enabled: boolean}> {
+    return [
+      {
+        name: 'obsidian-vault',
+        description: 'Obsidian Vault Operations (read/write notes)',
+        enabled: true
+      }
+    ];
+  }
+
+  /**
+   * Load available skills from opencode CLI
+   */
+  private async loadAvailableSkills(): Promise<void> {
+    const skills: Array<{name: string; description?: string; enabled: boolean}> = [];
+
+    // 1) Load from config if available (skills/tools)
+    const configAny = this.opencodeConfig as any;
+    if (configAny?.skills) {
+      if (Array.isArray(configAny.skills)) {
+        for (const item of configAny.skills) {
+          if (typeof item === 'string' && item) {
+            skills.push({ name: item, description: 'Configured skill', enabled: true });
+          } else if (item && typeof item === 'object' && item.name) {
+            skills.push({ name: String(item.name), description: item.description, enabled: item.enabled !== false });
+          }
+        }
+      } else {
+        const configSkills = Object.keys(configAny.skills);
+        for (const name of configSkills) {
+          if (name) {
+            skills.push({ name, description: 'Configured skill', enabled: true });
+          }
+        }
+      }
+    }
+    if (this.opencodeConfig?.tools) {
+      for (const [name, enabled] of Object.entries(this.opencodeConfig.tools)) {
+        if (enabled && !skills.find(s => s.name === name)) {
+          skills.push({ name, description: 'Configured tool', enabled: true });
+        }
+      }
+    }
+
+    // 1.5) Load skills from skills directory if configured or default locations
+    const skillsDirs: string[] = [];
+    const configSkillsDir = configAny?.skills_dir || configAny?.skillsDir;
+    if (typeof configSkillsDir === 'string') {
+      skillsDirs.push(configSkillsDir);
+    }
+
+    const vaultPath = this.plugin.getVaultPath();
+    if (vaultPath) {
+      skillsDirs.push(
+        path.join(vaultPath, '.opencode', 'skills'),
+        path.join(vaultPath, '.claude', 'skills'),
+        path.join(vaultPath, '.agents', 'skills')
+      );
+    }
+
+    const homeDir = process.env.HOME || process.env.USERPROFILE;
+    const appData = process.env.APPDATA;
+    const localAppData = process.env.LOCALAPPDATA;
+    if (homeDir) {
+      skillsDirs.push(
+        path.join(homeDir, '.config', 'opencode', 'skills'),
+        path.join(homeDir, '.config', 'claude', 'skills'),
+        path.join(homeDir, '.config', 'agents', 'skills')
+      );
+    }
+    if (appData) {
+      skillsDirs.push(path.join(appData, 'opencode', 'skills'));
+    }
+    if (localAppData) {
+      skillsDirs.push(path.join(localAppData, 'opencode', 'skills'));
+    }
+
+    for (const skillsDir of skillsDirs) {
+      if (!skillsDir || !fs.existsSync(skillsDir)) continue;
+      try {
+        const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const skillName = entry.name;
+          if (!skills.find(s => s.name === skillName)) {
+            skills.push({ name: skillName, description: 'Local skill', enabled: true });
+          }
+        }
+      } catch (error) {
+        console.warn('[OpenCode] Failed to read skills directory:', skillsDir, error);
+      }
+    }
+
+    if (this.opencodePath) {
+      try {
+        // Try different command formats
+      const commands = [
+        `"${this.opencodePath}" skills list --format json`,
+        `"${this.opencodePath}" skills --format json`,
+        `"${this.opencodePath}" skills list`,
+        `"${this.opencodePath}" skills`,
+        `"${this.opencodePath}" skill list`,
+        `"${this.opencodePath}" skill ls`
+      ];
+
+        console.log('[OpenCode] Trying skills commands:', commands);
+        let stdout = '';
+
+        for (const cmd of commands) {
+          try {
+            console.log('[OpenCode] Executing skills command:', cmd);
+            const result = await execAsync(cmd, { 
+              maxBuffer: 10 * 1024 * 1024,
+              timeout: this.plugin.settings.cliTimeout || 300000,
+              cwd: this.getCliCwd(),
+            });
+            stdout = result.stdout || result.stderr || '';
+            console.log('[OpenCode] Successfully executed skills command');
+            console.log('[OpenCode] Raw output (first 200 chars):', stdout.substring(0, 200));
+            if (stdout.trim()) break;
+          } catch (error) {
+            console.warn('[OpenCode] Skills command failed:', cmd, error);
+            continue;
+          }
+        }
+
+        // Try to parse as JSON first
+        try {
+          const skillsData = JSON.parse(stdout);
+          if (Array.isArray(skillsData)) {
+            const cliSkills = skillsData.map((s: any) => ({
+              name: this.cleanCliText(s.name || s.id || ''),
+              description: this.cleanCliText(s.description || s.name || ''),
+              enabled: s.enabled !== false
+            }));
+            for (const s of cliSkills) {
+              if (!skills.find(existing => existing.name === s.name)) {
+                skills.push(s);
+              }
+            }
+            console.log(`[OpenCode] Loaded ${cliSkills.length} skills from CLI`);
+          } else {
+            console.warn('[OpenCode] Skills data is not an array:', typeof skillsData);
+          }
+        } catch {
+          // Parse text output
+          const lines = stdout.trim().split('\n');
+          const cliSkills: Array<{name: string; description?: string; enabled: boolean}> = [];
+          for (const line of lines) {
+            const parsedLine = this.parseToolListLineV2(line);
+            if (parsedLine) {
+              cliSkills.push({
+                name: parsedLine.name,
+                description: parsedLine.description || parsedLine.name,
+                enabled: true
+              });
+            }
+          }
+          for (const s of cliSkills) {
+            if (!skills.find(existing => existing.name === s.name)) {
+              skills.push(s);
+            }
+          }
+          if (cliSkills.length > 0) {
+            console.log(`[OpenCode] Loaded ${cliSkills.length} skills from text output`);
+          }
+        }
+
+      } catch (error) {
+        console.warn('[OpenCode] Failed to load skills from CLI:', error);
+      }
+    }
+
+    this.availableSkills = skills;
+  }
+
+  private cleanCliText(value: string): string {
+    return value
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(/\r/g, '')
+      .trim();
+  }
+
+  private parseToolListLine(line: string): {name: string; description?: string} | null {
+    if (!line) return null;
+    const clean = this.cleanCliText(line);
+    if (!clean) return null;
+    if (clean.includes('DEBUG') || clean.includes('INFO') || clean.includes('Error:')) {
+      return null;
+    }
+    if (/^(mcps?|skills?)$/i.test(clean.trim())) return null;
+    if (/^search$/i.test(clean.trim())) return null;
+    if (/^[┌┬├┼└┴─│\s]+$/.test(clean)) return null;
+    const trimmed = clean.replace(/^[┌┬├┼└┴─│\s]+/, '').trim();
+
+    if (trimmed.includes('|')) {
+      const normalized = trimmed;
+      const parts = normalized.split('|').map(p => p.trim()).filter(Boolean);
+      if (parts.length > 0) {
+        const name = parts[0];
+        const description = parts[1];
+        if (name && this.isLikelyToolName(name)) return { name, description };
+      }
+    }
+    const match = trimmed.match(/^([A-Za-z0-9._/-]+)\s+(?:.+)?/);
+    if (match) {
+      if (!this.isLikelyToolName(match[1])) return null;
+      return { name: match[1] };
+    }
+    return null;
+  }
+
+  private parseToolListLineV2(line: string): {name: string; description?: string} | null {
+    if (!line) return null;
+    const clean = this.cleanCliText(line);
+    const trimmedClean = clean.trim();
+    if (!trimmedClean) return null;
+    if (trimmedClean.includes('DEBUG') || trimmedClean.includes('INFO') || trimmedClean.includes('Error:')) {
+      return null;
+    }
+    if (/^(mcps?|skills?)$/i.test(trimmedClean)) return null;
+    if (/^search$/i.test(trimmedClean)) return null;
+    if (/^(name|type|status|enabled|tools?|tool)$/i.test(trimmedClean)) return null;
+    if (/^[-=]{3,}$/.test(trimmedClean)) return null;
+    if (/^[\s┌┐└┘├┤┬┴┼─│═╔╗╚╝╠╣╦╩╬]+$/.test(trimmedClean)) return null;
+
+    const normalized = trimmedClean.replace(/[│║]/g, '|');
+    if (normalized.includes('|')) {
+      const parts = normalized.split('|').map(p => p.trim()).filter(Boolean);
+      if (parts.length > 0) {
+        const name = parts[0];
+        const description = parts.slice(1).join(' ').trim() || undefined;
+        if (name && this.isLikelyToolName(name)) return { name, description };
+      }
+    }
+
+    const stripped = normalized.replace(/^[✓✔✗✘•*-]+\s*/u, '');
+    const match = stripped.match(/^([A-Za-z0-9._:@/+()-]+)\s*(.*)?$/);
+    if (match) {
+      if (!this.isLikelyToolName(match[1])) return null;
+      const description = match[2]?.trim() || undefined;
+      return { name: match[1], description };
+    }
+    return null;
+  }
+
+  private isLikelyToolName(name: string): boolean {
+    const trimmed = name.trim();
+    if (!trimmed) return false;
+    if (trimmed.length <= 1) return false;
+    const lower = trimmed.toLowerCase();
+    if (['name', 'type', 'status', 'enabled', 'tools', 'tool'].includes(lower)) return false;
+    if (/^[-─]+$/.test(trimmed)) return false;
+    return true;
+  }
+
+  private getCliCwd(): string {
+    const vaultPath = this.plugin.getVaultPath();
+    if (vaultPath && fs.existsSync(vaultPath)) {
+      return vaultPath;
+    }
+    const homeDir = process.env.HOME || process.env.USERPROFILE;
+    if (homeDir && fs.existsSync(homeDir)) {
+      return homeDir;
+    }
+    return process.cwd();
   }
 }

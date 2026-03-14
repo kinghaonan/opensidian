@@ -4,9 +4,11 @@ import { StorageService } from './core/storage/StorageService';
 import { OpenCodeService } from './core/agent/OpenCodeService';
 import { McpServerManager } from './core/mcp/McpServerManager';
 import { PermissionManager } from './core/security/PermissionManager';
+import { ObsidianCLIService } from './core/cli/ObsidianCLIService';
 import { OpensidianView, VIEW_TYPE_OPENCODE } from './features/chat/OpensidianView';
 import { InlineEditService } from './features/inline-edit/InlineEditService';
 import { OpensidianSettingTab } from './features/settings/OpensidianSettingTab';
+import './styles.css';
 
 export default class OpensidianPlugin extends Plugin {
   settings!: OpensidianSettings;
@@ -15,6 +17,7 @@ export default class OpensidianPlugin extends Plugin {
   mcpManager!: McpServerManager;
   permissionManager!: PermissionManager;
   inlineEditService!: InlineEditService;
+  obsidianCLI!: ObsidianCLIService;  // Obsidian CLI 服务
   
   private conversations: Map<string, any> = new Map();
   private activeConversationId: string | null = null;
@@ -115,6 +118,10 @@ export default class OpensidianPlugin extends Plugin {
     
     // Initialize inline edit service (sync, fast)
     this.inlineEditService = new InlineEditService(this);
+    
+    // Initialize Obsidian CLI service
+    this.obsidianCLI = new ObsidianCLIService(this);
+    await this.obsidianCLI.initialize();
   }
   
   async ensureServicesInitialized(): Promise<void> {

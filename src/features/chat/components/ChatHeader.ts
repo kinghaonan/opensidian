@@ -217,6 +217,7 @@ export class ChatHeader {
       attr: { 'aria-label': t('stop', lang) }
     });
     this.stopBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+    this.stopBtn.title = lang === 'zh' ? '停止生成' : 'Stop generation';
     this.stopBtn.style.display = 'none';
     this.stopBtn.onclick = () => this.onStop?.();
   }
@@ -237,6 +238,7 @@ export class ChatHeader {
       attr: { 'aria-label': t('conversationHistory', lang) }
     });
     historyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>`;
+    historyBtn.title = lang === 'zh' ? '查看历史对话' : 'View conversation history';
     historyBtn.onclick = () => this.onHistoryClick?.();
   }
 
@@ -246,6 +248,7 @@ export class ChatHeader {
       attr: { 'aria-label': t('switchLanguage', this.plugin.settings.language as Language) }
     });
     this.langBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+    this.langBtn.title = _lang === 'zh' ? '切换语言' : 'Switch language';
     this.langBtn.onclick = () => this.toggleLanguage();
   }
 
@@ -263,6 +266,7 @@ export class ChatHeader {
       attr: { 'aria-label': t('settings', lang) }
     });
     settingsBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`;
+    settingsBtn.title = lang === 'zh' ? '设置' : 'Settings';
     settingsBtn.onclick = () => this.onSettingsClick?.();
   }
 

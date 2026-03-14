@@ -40,6 +40,7 @@ export class Sidebar {
       attr: { 'aria-label': t('toggleSidebar', lang) }
     });
     collapseBtn.innerHTML = '◀';
+    collapseBtn.title = lang === 'zh' ? '折叠侧边栏' : 'Collapse sidebar';
     collapseBtn.onclick = () => this.toggle();
 
     header.createEl('h4', { text: t('conversationHistory', lang) });
@@ -49,6 +50,7 @@ export class Sidebar {
       attr: { 'aria-label': t('newConversation', lang) }
     });
     newChatBtn.innerHTML = '➕';
+    newChatBtn.title = lang === 'zh' ? '新建对话' : 'New conversation';
     newChatBtn.onclick = () => this.onNewConversation?.();
 
     this.historyPanel = this.container.createDiv({ cls: 'opensidian-history-panel' });
@@ -91,6 +93,7 @@ export class Sidebar {
       attr: { 'data-session-id': session.id }
     });
     checkbox.checked = this.selectedHistoryIds.has(session.id);
+    checkbox.title = lang === 'zh' ? '选择删除' : 'Select for deletion';
     checkbox.onchange = () => {
       if (checkbox.checked) {
         this.selectedHistoryIds.add(session.id);
@@ -117,6 +120,7 @@ export class Sidebar {
       attr: { 'aria-label': t('deleteConversation', lang) }
     });
     deleteBtn.innerHTML = '🗑️';
+    deleteBtn.title = lang === 'zh' ? '删除对话' : 'Delete conversation';
     deleteBtn.onclick = async (e) => {
       e.stopPropagation();
       if (confirm(t('deleteConfirm', lang))) {
