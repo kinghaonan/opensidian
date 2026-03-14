@@ -1,7 +1,7 @@
 {
   "id": "opensidian",
   "name": "Opensidian",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "minAppVersion": "0.15.0",
   "description": "An Obsidian plugin that embeds opencode as an AI collaborator in your vault with integrated MCP tools.",
   "author": "OpenSource Community",
