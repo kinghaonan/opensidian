@@ -456,6 +456,9 @@
     line-height: 1.6;
     font-size: 13px;
     color: var(--os-text-primary);
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .opensidian-user .opensidian-message-content {
@@ -505,6 +508,9 @@
     border-radius: 3px;
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
     font-size: 12px;
+    white-space: break-spaces;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .opensidian-message-content pre {
@@ -514,6 +520,10 @@
     border-radius: var(--os-border-radius-sm);
     overflow-x: auto;
     margin: 10px 0;
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .opensidian-message-content pre code {
@@ -658,8 +668,10 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: 240px;
-    overflow: auto;
+    max-height: min(60vh, 520px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 2px;
 }
 
 .opensidian-tool-calls.collapsed .opensidian-tool-calls-list {
@@ -671,8 +683,10 @@
     border: 1px solid var(--os-border-color);
     border-radius: var(--os-border-radius-sm);
     margin-bottom: 6px;
-    overflow: hidden;
+    overflow: visible;
     transition: var(--os-transition);
+    min-width: 0;
+    flex-shrink: 0;
 }
 
 .opensidian-tool-header {
@@ -684,6 +698,7 @@
     font-weight: 500;
     background: var(--os-bg-secondary);
     border-bottom: 1px solid var(--os-border-color);
+    min-width: 0;
 }
 
 .opensidian-tool-status {
@@ -692,6 +707,9 @@
 
 .opensidian-tool-name {
     color: var(--os-text-primary);
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .opensidian-tool-toggle {
@@ -705,6 +723,8 @@
 
 .opensidian-tool-content {
     padding: 10px 12px;
+    overflow: visible;
+    min-width: 0;
 }
 
 .opensidian-tool-arguments,
@@ -716,6 +736,11 @@
     border-radius: var(--os-border-radius-sm);
     margin-top: 6px;
     overflow-x: auto;
+    overflow-y: visible;
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .opensidian-tool-arg-label {
@@ -730,6 +755,9 @@
     padding: 6px;
     background: rgba(211, 47, 47, 0.08);
     border-radius: var(--os-border-radius-sm);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 /* Welcome Message */

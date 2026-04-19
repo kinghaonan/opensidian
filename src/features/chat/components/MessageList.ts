@@ -386,6 +386,11 @@ export class MessageList {
     header.onclick = () => {
       toolEl.toggleClass('collapsed', !toolEl.hasClass('collapsed'));
       toggleEl.style.transform = toolEl.hasClass('collapsed') ? 'rotate(0deg)' : 'rotate(90deg)';
+      if (!toolEl.hasClass('collapsed')) {
+        window.setTimeout(() => {
+          toolEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }, 0);
+      }
     };
     
     // 参数显示
