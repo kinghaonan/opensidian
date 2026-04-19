@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
 import OpensidianPlugin from '../../main';
-import { PermissionMode, AgentMode, Language, FREE_MODELS, POPULAR_MODELS } from '../../core/types/settings';
+import { PermissionMode, AgentMode, Language } from '../../core/types/settings';
 import { t } from '../../i18n';
 
 export class OpensidianSettingTab extends PluginSettingTab {

@@ -1,6 +1,5 @@
 import OpensidianPlugin from '../../../main';
 import { ConnectionState } from '../../../core/agent/ConnectionManager';
-import { t } from '../../../i18n';
 
 export class StatusIndicator {
   private container: HTMLElement;

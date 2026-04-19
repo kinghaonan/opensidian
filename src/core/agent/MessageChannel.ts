@@ -11,7 +11,7 @@
  * - 溢出策略：丢弃最新的并警告
  */
 
-import type { ChatMessage, ImageAttachment } from '../types/chat';
+import type { ImageAttachment } from '../types/chat';
 
 /** 消息通道配置 */
 export const MESSAGE_CHANNEL_CONFIG = {

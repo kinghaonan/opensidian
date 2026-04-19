@@ -1223,11 +1223,6 @@ export class OpenCodeService {
       });
 
       // 工具调用计数器和循环保护
-      const MAX_TOOL_CALLS = 50; // 最大工具调用次数
-      const MAX_STEP_START = 100; // 最大 step_start 事件数
-      let toolCallCount = 0;
-      let stepStartCount = 0;
-
       // 实时逐行处理 stdout 流
       try {
         for await (const line of rl) {
@@ -1580,11 +1575,6 @@ export class OpenCodeService {
       });
 
       // 工具调用计数器和循环保护
-      const MAX_TOOL_CALLS = 50; // 最大工具调用次数
-      const MAX_STEP_START = 100; // 最大 step_start 事件数
-      let toolCallCount = 0;
-      let stepStartCount = 0;
-
       // 实时逐行处理 stdout 流
       try {
         for await (const line of rl) {
@@ -1795,11 +1785,6 @@ export class OpenCodeService {
       });
 
       // 工具调用计数器和循环保护
-      const MAX_TOOL_CALLS = 50; // 最大工具调用次数
-      const MAX_STEP_START = 100; // 最大 step_start 事件数
-      let toolCallCount = 0;
-      let stepStartCount = 0;
-
       // 实时逐行处理 stdout 流
       try {
         for await (const line of rl) {
@@ -2568,8 +2553,9 @@ export class OpenCodeService {
   }
 
   private cleanCliText(value: string): string {
+    const ansiPattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[a-zA-Z]`, 'g');
     return value
-      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      .replace(ansiPattern, '')
       .replace(/\r/g, '')
       .trim();
   }

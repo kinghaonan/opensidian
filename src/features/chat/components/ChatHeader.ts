@@ -141,8 +141,6 @@ export class ChatHeader {
     this.modelDropdown.empty();
     const currentModel = this.plugin.openCodeService.getActiveModel();
     const availableModels = this.plugin.openCodeService.getAvailableModels();
-    const lang = this.plugin.settings.language as Language;
-
     const autoItem = this.modelDropdown.createDiv({ cls: 'opensidian-model-item' });
     autoItem.textContent = 'Auto';
     if (this.plugin.settings.model === 'auto') {

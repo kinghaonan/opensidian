@@ -2,7 +2,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { TFile } from 'obsidian';
 import OpensidianPlugin from '../../../main';
-import { ObsidianCLIService } from '../../cli/ObsidianCLIService';
 
 /**
  * 注册 Obsidian CLI 相关的 MCP 工具

@@ -50,7 +50,6 @@ export class ToolQuickPicker {
     // 计算弹窗位置 - 改为向上展开避免被遮挡
     const rect = currentTarget.getBoundingClientRect();
     const popupHeight = 300; // 预估弹窗高度
-    const viewportHeight = window.innerHeight;
     
     // 默认在按钮上方显示
     let top = rect.top + window.scrollY - popupHeight;
@@ -120,7 +119,7 @@ export class ToolQuickPicker {
   private renderMCPList(lang: Language): void {
     if (!this.popupContainer) return;
 
-    const title = this.popupContainer.createDiv({ 
+    this.popupContainer.createDiv({ 
       cls: 'opensidian-tool-picker-title',
       text: t('selectMCP', lang) || '选择 MCP 服务器'
     });
@@ -189,7 +188,7 @@ export class ToolQuickPicker {
   private renderSkillsList(lang: Language): void {
     if (!this.popupContainer) return;
 
-    const title = this.popupContainer.createDiv({ 
+    this.popupContainer.createDiv({ 
       cls: 'opensidian-tool-picker-title',
       text: t('selectSkill', lang) || '选择 Skill'
     });
