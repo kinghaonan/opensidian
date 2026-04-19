@@ -142,7 +142,7 @@ export class OpenCodeService {
     // Try using PATH first (fast and reliable)
     try {
       const cmd = process.platform === 'win32' ? 'where opencode' : 'which opencode';
-      const { stdout } = await execAsync(cmd);
+      const { stdout } = await execAsync(cmd, this.getCliExecOptions());
       const foundPath = stdout.trim().split('\n')[0]?.replace(/["\r\n]+/g, '').trim();
       if (foundPath) {
         this.opencodePath = foundPath;
@@ -307,6 +307,140 @@ export class OpenCodeService {
       if (fs.existsSync(loc)) return loc;
     }
     return locations[0] || null;
+  }
+
+  private getCliIsolationRoot(): string {
+    const candidates = [
+      this.plugin.settings.tempDir?.trim(),
+      this.plugin.getVaultPath() ? path.join(this.plugin.getVaultPath(), '.obsidian', 'plugins', 'opensidian', '.opencode-cli') : null,
+      path.join(process.cwd(), '.opencode-cli'),
+      path.join(os.tmpdir(), 'opensidian-opencode-cli')
+    ].filter(Boolean) as string[];
+
+    for (const candidate of candidates) {
+      if (!candidate.includes("'")) {
+        return candidate;
+      }
+    }
+
+    return path.join(process.cwd(), '.opencode-cli');
+  }
+
+  private sanitizeCliConfig(config: OpenCodeConfig | null): Record<string, any> {
+    if (!config) return {};
+
+    const cloned = JSON.parse(JSON.stringify(config));
+    delete cloned.default_agent;
+    delete cloned.defaultAgent;
+    delete cloned.agent;
+
+    return cloned;
+  }
+
+  private getConfiguredSkillDirectories(): string[] {
+    const dirs: string[] = [];
+    const configAny = this.opencodeConfig as any;
+    const configSkillsDir = configAny?.skills_dir || configAny?.skillsDir;
+    if (typeof configSkillsDir === 'string') {
+      dirs.push(configSkillsDir);
+    }
+
+    const vaultPath = this.plugin.getVaultPath();
+    if (vaultPath) {
+      dirs.push(
+        path.join(vaultPath, '.opencode', 'skills'),
+        path.join(vaultPath, '.claude', 'skills'),
+        path.join(vaultPath, '.agents', 'skills')
+      );
+    }
+
+    const homeDir = process.env.HOME || process.env.USERPROFILE;
+    const appData = process.env.APPDATA;
+    const localAppData = process.env.LOCALAPPDATA;
+    if (homeDir) {
+      dirs.push(
+        path.join(homeDir, '.config', 'opencode', 'skills'),
+        path.join(homeDir, '.config', 'claude', 'skills'),
+        path.join(homeDir, '.config', 'agents', 'skills')
+      );
+    }
+    if (appData) {
+      dirs.push(path.join(appData, 'opencode', 'skills'));
+    }
+    if (localAppData) {
+      dirs.push(path.join(localAppData, 'opencode', 'skills'));
+    }
+
+    return [...new Set(dirs)];
+  }
+
+  private mirrorSkillDirectories(targetSkillsDir: string): void {
+    fs.mkdirSync(targetSkillsDir, { recursive: true });
+
+    for (const skillsDir of this.getConfiguredSkillDirectories()) {
+      if (!skillsDir || !fs.existsSync(skillsDir)) continue;
+      if (path.resolve(skillsDir) === path.resolve(targetSkillsDir)) continue;
+
+      try {
+        const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const sourceDir = path.join(skillsDir, entry.name);
+          const targetDir = path.join(targetSkillsDir, entry.name);
+          if (fs.existsSync(targetDir)) continue;
+          fs.cpSync(sourceDir, targetDir, { recursive: true });
+        }
+      } catch (error) {
+        console.warn('[OpenCode] Failed to mirror skills directory:', skillsDir, error);
+      }
+    }
+  }
+
+  private ensureCliRuntimeEnvironment(): NodeJS.ProcessEnv {
+    const cliRoot = this.getCliIsolationRoot();
+    const cliHome = path.join(cliRoot, 'home');
+    const configBase = path.join(cliHome, '.config');
+    const opencodeConfigDir = path.join(configBase, 'opencode');
+    const isolatedSkillsDir = path.join(opencodeConfigDir, 'skills');
+    const appData = path.join(cliHome, 'AppData', 'Roaming');
+    const localAppData = path.join(cliHome, 'AppData', 'Local');
+
+    fs.mkdirSync(opencodeConfigDir, { recursive: true });
+    fs.mkdirSync(appData, { recursive: true });
+    fs.mkdirSync(localAppData, { recursive: true });
+    this.mirrorSkillDirectories(isolatedSkillsDir);
+
+    const sanitizedConfig = this.sanitizeCliConfig(this.opencodeConfig);
+    fs.writeFileSync(
+      path.join(opencodeConfigDir, 'opencode.json'),
+      JSON.stringify(sanitizedConfig, null, 2),
+      'utf-8'
+    );
+
+    if (this.opencodeAuth) {
+      fs.writeFileSync(
+        path.join(opencodeConfigDir, 'auth.json'),
+        JSON.stringify(this.opencodeAuth, null, 2),
+        'utf-8'
+      );
+    }
+
+    return {
+      ...process.env,
+      HOME: cliHome,
+      USERPROFILE: cliHome,
+      XDG_CONFIG_HOME: configBase,
+      APPDATA: appData,
+      LOCALAPPDATA: localAppData
+    };
+  }
+
+  private getCliExecOptions(extra: Record<string, any> = {}): Record<string, any> {
+    return {
+      cwd: this.getCliCwd(),
+      env: this.ensureCliRuntimeEnvironment(),
+      ...extra
+    };
   }
 
   private parseJsonWithComments(content: string): any {
@@ -562,11 +696,10 @@ export class OpenCodeService {
       let output = '';
       for (const cmd of commands) {
         try {
-          const result = await execAsync(cmd, { 
+          const result = await execAsync(cmd, this.getCliExecOptions({
             maxBuffer: 10 * 1024 * 1024,
             timeout: this.plugin.settings.cliTimeout || 300000,
-            cwd: this.getCliCwd(),
-          });
+          }));
           output = result.stdout || result.stderr || '';
           if (output.trim()) break;
         } catch {
@@ -1048,7 +1181,9 @@ export class OpenCodeService {
       const child = spawn(`"${this.opencodePath}"`, args, {
         shell: true, // 使用 shell 以处理路径中的空格和引号
         windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: this.getCliCwd(),
+        env: this.ensureCliRuntimeEnvironment()
       });
 
       // 设置超时
@@ -1407,7 +1542,9 @@ export class OpenCodeService {
       const child = spawn(pipeCmd, {
         shell: true,
         windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: this.getCliCwd(),
+        env: this.ensureCliRuntimeEnvironment()
       });
 
       // 设置超时
@@ -1620,7 +1757,9 @@ export class OpenCodeService {
       const child = spawn(redirectCmd, {
         shell: true,
         windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: this.getCliCwd(),
+        env: this.ensureCliRuntimeEnvironment()
       });
 
       // 设置超时
@@ -2147,7 +2286,7 @@ export class OpenCodeService {
     // Method 1: Try using CLI
     if (this.opencodePath) {
       try {
-        await execAsync(`"${this.opencodePath}" session delete ${sessionId}`);
+        await execAsync(`"${this.opencodePath}" session delete ${sessionId}`, this.getCliExecOptions());
         console.log(`Deleted session ${sessionId} via CLI`);
         return true;
       } catch (error) {
@@ -2177,7 +2316,7 @@ export class OpenCodeService {
     // Method 1: Try using CLI
     if (this.opencodePath) {
       try {
-        const { stdout } = await execAsync(`"${this.opencodePath}" session list --format json`);
+        const { stdout } = await execAsync(`"${this.opencodePath}" session list --format json`, this.getCliExecOptions());
         const sessions = JSON.parse(stdout);
         return sessions.map((s: any) => s.id);
       } catch {
@@ -2295,11 +2434,10 @@ export class OpenCodeService {
         for (const cmd of commands) {
           try {
             console.log('[OpenCode] Executing MCP command:', cmd);
-            const result = await execAsync(cmd, { 
+            const result = await execAsync(cmd, this.getCliExecOptions({
               maxBuffer: 10 * 1024 * 1024,
               timeout: this.plugin.settings.cliTimeout || 300000,
-              cwd: this.getCliCwd(),
-            });
+            }));
             stdout = result.stdout || result.stderr || '';
             console.log('[OpenCode] Successfully executed MCP command');
             if (stdout.trim()) break;
@@ -2409,40 +2547,8 @@ export class OpenCodeService {
       }
     }
 
-    // 1.5) Load skills from skills directory if configured or default locations
-    const skillsDirs: string[] = [];
-    const configSkillsDir = configAny?.skills_dir || configAny?.skillsDir;
-    if (typeof configSkillsDir === 'string') {
-      skillsDirs.push(configSkillsDir);
-    }
-
-    const vaultPath = this.plugin.getVaultPath();
-    if (vaultPath) {
-      skillsDirs.push(
-        path.join(vaultPath, '.opencode', 'skills'),
-        path.join(vaultPath, '.claude', 'skills'),
-        path.join(vaultPath, '.agents', 'skills')
-      );
-    }
-
-    const homeDir = process.env.HOME || process.env.USERPROFILE;
-    const appData = process.env.APPDATA;
-    const localAppData = process.env.LOCALAPPDATA;
-    if (homeDir) {
-      skillsDirs.push(
-        path.join(homeDir, '.config', 'opencode', 'skills'),
-        path.join(homeDir, '.config', 'claude', 'skills'),
-        path.join(homeDir, '.config', 'agents', 'skills')
-      );
-    }
-    if (appData) {
-      skillsDirs.push(path.join(appData, 'opencode', 'skills'));
-    }
-    if (localAppData) {
-      skillsDirs.push(path.join(localAppData, 'opencode', 'skills'));
-    }
-
-    for (const skillsDir of skillsDirs) {
+    // 1.5) Load skills from local skills directories
+    for (const skillsDir of this.getConfiguredSkillDirectories()) {
       if (!skillsDir || !fs.existsSync(skillsDir)) continue;
       try {
         const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
@@ -2455,86 +2561,6 @@ export class OpenCodeService {
         }
       } catch (error) {
         console.warn('[OpenCode] Failed to read skills directory:', skillsDir, error);
-      }
-    }
-
-    if (this.opencodePath) {
-      try {
-        // Try different command formats
-      const commands = [
-        `"${this.opencodePath}" skills list --format json`,
-        `"${this.opencodePath}" skills --format json`,
-        `"${this.opencodePath}" skills list`,
-        `"${this.opencodePath}" skills`,
-        `"${this.opencodePath}" skill list`,
-        `"${this.opencodePath}" skill ls`
-      ];
-
-        console.log('[OpenCode] Trying skills commands:', commands);
-        let stdout = '';
-
-        for (const cmd of commands) {
-          try {
-            console.log('[OpenCode] Executing skills command:', cmd);
-            const result = await execAsync(cmd, { 
-              maxBuffer: 10 * 1024 * 1024,
-              timeout: this.plugin.settings.cliTimeout || 300000,
-              cwd: this.getCliCwd(),
-            });
-            stdout = result.stdout || result.stderr || '';
-            console.log('[OpenCode] Successfully executed skills command');
-            console.log('[OpenCode] Raw output (first 200 chars):', stdout.substring(0, 200));
-            if (stdout.trim()) break;
-          } catch (error) {
-            console.warn('[OpenCode] Skills command failed:', cmd, error);
-            continue;
-          }
-        }
-
-        // Try to parse as JSON first
-        try {
-          const skillsData = JSON.parse(stdout);
-          if (Array.isArray(skillsData)) {
-            const cliSkills = skillsData.map((s: any) => ({
-              name: this.cleanCliText(s.name || s.id || ''),
-              description: this.cleanCliText(s.description || s.name || ''),
-              enabled: s.enabled !== false
-            }));
-            for (const s of cliSkills) {
-              if (!skills.find(existing => existing.name === s.name)) {
-                skills.push(s);
-              }
-            }
-            console.log(`[OpenCode] Loaded ${cliSkills.length} skills from CLI`);
-          } else {
-            console.warn('[OpenCode] Skills data is not an array:', typeof skillsData);
-          }
-        } catch {
-          // Parse text output
-          const lines = stdout.trim().split('\n');
-          const cliSkills: Array<{name: string; description?: string; enabled: boolean}> = [];
-          for (const line of lines) {
-            const parsedLine = this.parseToolListLineV2(line);
-            if (parsedLine) {
-              cliSkills.push({
-                name: parsedLine.name,
-                description: parsedLine.description || parsedLine.name,
-                enabled: true
-              });
-            }
-          }
-          for (const s of cliSkills) {
-            if (!skills.find(existing => existing.name === s.name)) {
-              skills.push(s);
-            }
-          }
-          if (cliSkills.length > 0) {
-            console.log(`[OpenCode] Loaded ${cliSkills.length} skills from text output`);
-          }
-        }
-
-      } catch (error) {
-        console.warn('[OpenCode] Failed to load skills from CLI:', error);
       }
     }
 
