@@ -1,6 +1,8 @@
 import OpensidianPlugin from '../../main';
 import { MCPServerConfig } from '../types/opencode';
 import { registerCLITools } from './tools/CLITools';
+import { SSEClientTransport } from './SSEClientTransport';
+import { HTTPClientTransport } from './HTTPClientTransport';
 
 interface MCPServer {
   name: string;
@@ -76,6 +78,14 @@ export class McpServerManager {
       if (server.type === 'stdio') {
         config.command = [server.command!, ...(server.args || [])];
         config.environment = server.env;
+      } else if (server.type === 'sse' && server.url) {
+        config.url = server.url;
+        config.type = 'remote';
+        this.connectSSEServer(server.name, server.url, server.env);
+      } else if (server.type === 'http' && server.url) {
+        config.url = server.url;
+        config.type = 'remote';
+        this.connectHTTPServer(server.name, server.url, server.env);
       } else {
         config.url = server.url;
       }
@@ -86,6 +96,45 @@ export class McpServerManager {
         enabled: true,
       });
     }
+  }
+
+  private sseConnections: Map<string, SSEClientTransport> = new Map();
+  private httpConnections: Map<string, HTTPClientTransport> = new Map();
+
+  connectSSEServer(name: string, url: string, env?: Record<string, string>): void {
+    const transport = new SSEClientTransport({
+      url,
+      headers: env ? { ...env } : {},
+      onMessage: (data) => {
+        console.log(`[MCP SSE:${name}] Message:`, data);
+      },
+      onError: (error) => {
+        console.error(`[MCP SSE:${name}] Error:`, error.message);
+      },
+      onClose: () => {
+        console.log(`[MCP SSE:${name}] Disconnected`);
+        this.sseConnections.delete(name);
+      },
+    });
+    this.sseConnections.set(name, transport);
+    transport.connect();
+  }
+
+  connectHTTPServer(name: string, url: string, env?: Record<string, string>): void {
+    const transport = new HTTPClientTransport({
+      url,
+      headers: env ? { ...env } : {},
+    });
+    this.httpConnections.set(name, transport);
+    console.log(`[MCP HTTP:${name}] Registered at ${url}`);
+  }
+
+  async disconnectAll(): Promise<void> {
+    for (const [name, conn] of this.sseConnections) {
+      conn.disconnect();
+    }
+    this.sseConnections.clear();
+    this.httpConnections.clear();
   }
 
   private async loadOpencodeMCPServers(): Promise<void> {

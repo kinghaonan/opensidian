@@ -3,13 +3,21 @@ import OpensidianPlugin from '../../../main';
 import { ChatMessage, ImageAttachment } from '../../../core/types/chat';
 import { t, Language } from '../../../i18n';
 
+interface StreamingRefs {
+  contentEl: HTMLElement;
+  thinkingEl: HTMLElement;
+  thinkingContentEl: HTMLElement;
+}
+
 export class MessageList {
   private container: HTMLElement;
   private plugin: OpensidianPlugin;
   private component: Component;
   private messages: ChatMessage[] = [];
   private thinkingElements: Map<string, HTMLElement> = new Map();
+  private streamingRefs: Map<HTMLElement, StreamingRefs> = new Map();
   private onFileClick?: (file: TFile) => void;
+  private scrollRafId: number | null = null;
 
   constructor(container: HTMLElement, plugin: OpensidianPlugin) {
     this.container = container;
@@ -32,6 +40,7 @@ export class MessageList {
   clear(): void {
     this.messages = [];
     this.thinkingElements.clear();
+    this.streamingRefs.clear();
     this.container.empty();
   }
 
@@ -225,12 +234,15 @@ export class MessageList {
       new Notice(t('copied', lang));
     });
 
+    this.streamingRefs.set(contentContainer, { contentEl, thinkingEl, thinkingContentEl: thinkingContent });
+
     this.scrollToBottom();
     return contentContainer;
   }
 
   updateStreamingMessage(container: HTMLElement, content: string, thinking?: string, finalize = false): void {
-    const contentEl = container.querySelector('.opensidian-message-content') as HTMLElement | null;
+    const refs = this.streamingRefs.get(container);
+    const contentEl = refs?.contentEl ?? container.querySelector('.opensidian-message-content') as HTMLElement | null;
     if (contentEl) {
       if (finalize) {
         contentEl.removeClass('opensidian-streaming');
@@ -242,7 +254,7 @@ export class MessageList {
     }
 
     if (thinking && this.plugin.settings.showThinking) {
-      const thinkingEl = container.querySelector('.opensidian-thinking') as HTMLElement;
+      const thinkingEl = refs?.thinkingEl ?? container.querySelector('.opensidian-thinking') as HTMLElement;
       if (thinkingEl) {
         thinkingEl.style.display = 'block';
       }
@@ -252,12 +264,13 @@ export class MessageList {
   }
 
   updateThinking(container: HTMLElement, thinking: string): void {
-    const thinkingContent = container.querySelector('.opensidian-thinking-content');
-    if (thinkingContent) {
-      thinkingContent.textContent = thinking;
+    const refs = this.streamingRefs.get(container);
+    const thinkingContentEl = refs?.thinkingContentEl ?? container.querySelector('.opensidian-thinking-content');
+    if (thinkingContentEl) {
+      thinkingContentEl.textContent = thinking;
     }
 
-    const thinkingEl = container.querySelector('.opensidian-thinking') as HTMLElement;
+    const thinkingEl = refs?.thinkingEl ?? container.querySelector('.opensidian-thinking') as HTMLElement;
     if (thinkingEl && this.plugin.settings.showThinking) {
       thinkingEl.style.display = 'block';
     }
@@ -265,9 +278,10 @@ export class MessageList {
 
   showErrorMessage(container: HTMLElement, error: string): void {
     const lang = this.plugin.settings.language as Language;
-    const contentEl = container.querySelector('.opensidian-message-content');
+    const refs = this.streamingRefs.get(container);
+    const contentEl = refs?.contentEl ?? container.querySelector('.opensidian-message-content');
+    this.streamingRefs.delete(container);
     
-    // 确保 error 是字符串，处理可能传入的对象或其他类型
     const errorStr = typeof error === 'string' ? error : JSON.stringify(error);
     
     if (contentEl) {
@@ -302,9 +316,12 @@ export class MessageList {
   }
 
   scrollToBottom(): void {
-    if (this.plugin.settings.enableAutoScroll) {
+    if (!this.plugin.settings.enableAutoScroll) return;
+    if (this.scrollRafId !== null) return;
+    this.scrollRafId = requestAnimationFrame(() => {
+      this.scrollRafId = null;
       this.container.scrollTop = this.container.scrollHeight;
-    }
+    });
   }
 
   addWelcomeMessage(): void {

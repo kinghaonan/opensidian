@@ -1,8 +1,10 @@
-import { Notice } from 'obsidian';
+import { Notice, TFile } from 'obsidian';
 import OpensidianPlugin from '../../../main';
 import { ImageAttachment } from '../../../core/types/chat';
 import { t, Language } from '../../../i18n';
 import { ToolQuickPicker, QuickToolSelection } from './ToolQuickPicker';
+import { MentionSuggest } from './MentionSuggest';
+import { SlashCommand, SlashCommandDef } from './SlashCommand';
 
 export class InputArea {
   private container: HTMLElement;
@@ -18,6 +20,8 @@ export class InputArea {
   private mcpBtn!: HTMLButtonElement;
   private skillBtn!: HTMLButtonElement;
   private quickSelectedTools: QuickToolSelection[] = [];
+  private mentionSuggest!: MentionSuggest;
+  private slashCommand!: SlashCommand;
   
   private onSend?: (message: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]) => void;
   private onAppend?: (message: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]) => void;
@@ -73,17 +77,110 @@ export class InputArea {
       }
     });
 
+    this.mentionSuggest = new MentionSuggest(container, this.plugin);
+    this.mentionSuggest.setOnSelect((file: TFile) => {
+      this.insertMention(file);
+    });
+
+    const slashCommands: SlashCommandDef[] = [
+      { command: 'clear', label: '清空对话', description: '清除当前对话历史', action: () => this.clearMessages() },
+      { command: 'new', label: '新对话', description: '开始新的对话', action: () => this.newConversation() },
+      { command: 'plan', label: '计划模式', description: '切换到计划模式', action: () => this.switchMode('plan') },
+      { command: 'build', label: '构建模式', description: '切换到构建模式', action: () => this.switchMode('build') },
+      { command: 'model', label: '切换模型', description: '显示模型列表', action: () => this.showModels() },
+      { command: 'help', label: '帮助', description: '显示可用命令', action: () => this.showHelp() },
+    ];
+    this.slashCommand = new SlashCommand(container, slashCommands);
+
     this.textarea.addEventListener('input', () => {
       this.textarea.style.height = 'auto';
       this.textarea.style.height = Math.min(this.textarea.scrollHeight, 200) + 'px';
+      this.handleSuggestions();
     });
 
     this.textarea.addEventListener('keydown', (e) => {
+      if (this.mentionSuggest.isVisible() || this.slashCommand.isVisible()) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          this.mentionSuggest.navigate('down');
+          this.slashCommand.navigate('down');
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          this.mentionSuggest.navigate('up');
+          this.slashCommand.navigate('up');
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+          if (this.mentionSuggest.isVisible()) {
+            e.preventDefault();
+            this.mentionSuggest.confirmSelection();
+          } else if (this.slashCommand.isVisible()) {
+            e.preventDefault();
+            this.slashCommand.executeCurrent();
+          }
+        } else if (e.key === 'Escape') {
+          this.mentionSuggest.hide();
+          this.slashCommand.hide();
+        }
+        return;
+      }
+
       if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         this.sendMessage();
       }
     });
+  }
+
+  private handleSuggestions(): void {
+    const value = this.textarea.value;
+    const cursorPos = this.textarea.selectionStart;
+    const mentionResult = this.mentionSuggest.handleInput(value, cursorPos);
+    const slashResult = this.slashCommand.handleInput(value, cursorPos);
+    if (mentionResult || slashResult) {
+      console.log('[InputArea] Suggestion shown:', mentionResult ? 'mention' : 'slash', 'value:', value.substring(0, 20));
+    }
+  }
+
+  private insertMention(file: TFile): void {
+    const cursorPos = this.textarea.selectionStart;
+    const textBefore = this.textarea.value.slice(0, cursorPos);
+    const textAfter = this.textarea.value.slice(cursorPos);
+    const mentionMatch = textBefore.match(/@\S*$/);
+
+    if (mentionMatch) {
+      const before = textBefore.slice(0, mentionMatch.index);
+      const mentionText = `@[[${file.path}]] `;
+      this.textarea.value = before + mentionText + textAfter;
+      const newCursor = before.length + mentionText.length;
+      this.textarea.selectionStart = newCursor;
+      this.textarea.selectionEnd = newCursor;
+      this.textarea.focus();
+    }
+  }
+
+  private clearMessages(): void {
+    this.textarea.value = '';
+    this.textarea.focus();
+  }
+
+  private newConversation(): void {
+    this.textarea.value = '';
+    this.textarea.focus();
+    (this.plugin.app.workspace as any).trigger('opensidian:new-conversation');
+  }
+
+  private switchMode(mode: string): void {
+    this.textarea.value = '';
+    this.textarea.focus();
+    new Notice(mode === 'plan' ? '切换到计划模式' : '切换到构建模式');
+  }
+
+  private showModels(): void {
+    this.textarea.value = '';
+    this.textarea.focus();
+  }
+
+  private showHelp(): void {
+    this.textarea.value = '可用命令: /clear /new /plan /build /model /help';
   }
 
   private renderButtons(container: HTMLElement, _lang: Language): void {

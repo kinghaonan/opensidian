@@ -109,8 +109,7 @@ export default class OpensidianPlugin extends Plugin {
     // Initialize permission manager (sync, fast)
     this.permissionManager = new PermissionManager(this.settings);
     
-    // Create OpenCode service instance but DON'T initialize yet
-    // Initialization will happen lazily when user opens the view
+    // Create OpenCode service instance
     this.openCodeService = new OpenCodeService(this);
     
     // Create MCP manager instance (lazy init)
@@ -122,15 +121,25 @@ export default class OpensidianPlugin extends Plugin {
     // Initialize Obsidian CLI service
     this.obsidianCLI = new ObsidianCLIService(this);
     await this.obsidianCLI.initialize();
+
+    // 自动连接：如果启用了自动加载 opencode 配置，则在启动时初始化
+    if (this.settings.autoLoadOpencodeConfig) {
+      this.openCodeService.initialize().then(() => {
+        console.log('OpenCode service auto-initialized on startup');
+      }).catch(err => {
+        console.warn('OpenCode auto-initialization failed (non-blocking):', err);
+      });
+    }
   }
   
   async ensureServicesInitialized(): Promise<void> {
-    if (!this.openCodeService.isReady()) {
-      try {
-        await this.openCodeService.initialize();
-      } catch (error) {
-        console.warn('OpenCode service initialization failed:', error);
-      }
+    if (this.openCodeService.isReady()) {
+      return;
+    }
+    try {
+      await this.openCodeService.initialize();
+    } catch (error) {
+      console.warn('OpenCode service initialization failed:', error);
     }
   }
 

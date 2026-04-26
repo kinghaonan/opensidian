@@ -67,4 +67,5 @@ export type QueryOptions = {
   stream?: boolean;
   thinking?: boolean;
   attachments?: ImageAttachment[];
+  sessionId?: string;
 };

@@ -240,9 +240,10 @@ export class StreamBuffer {
   private buffer: string = '';
   private thinkingBuffer: string = '';
   private lastFlushTime: number = 0;
-  private flushInterval: number = 120; // 120ms 刷新间隔
+  private flushInterval: number = 120;
   private maxBufferSize: number = 2000;
   private onFlush?: (content: string, thinking: string) => void;
+  private rafId: number | null = null;
 
   constructor(
     onFlush?: (content: string, thinking: string) => void,
@@ -253,25 +254,16 @@ export class StreamBuffer {
     if (options?.maxBufferSize) this.maxBufferSize = options.maxBufferSize;
   }
 
-  /**
-   * 添加文本内容
-   */
   appendText(content: string): void {
     this.buffer += content;
     this.maybeFlush();
   }
 
-  /**
-   * 添加思考内容
-   */
   appendThinking(content: string): void {
     this.thinkingBuffer += content;
     this.maybeFlush();
   }
 
-  /**
-   * 可能需要刷新
-   */
   private maybeFlush(): void {
     const now = Date.now();
     if (
@@ -282,17 +274,33 @@ export class StreamBuffer {
     }
   }
 
-  /**
-   * 强制刷新
-   */
   flush(force = false): void {
+    if (force) {
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+      if (this.buffer || this.thinkingBuffer) {
+        this.onFlush?.(this.buffer, this.thinkingBuffer);
+        this.buffer = '';
+        this.thinkingBuffer = '';
+        this.lastFlushTime = Date.now();
+      } else {
+        this.onFlush?.('', '');
+      }
+      return;
+    }
+
     if (this.buffer || this.thinkingBuffer) {
-      this.onFlush?.(this.buffer, this.thinkingBuffer);
-      this.buffer = '';
-      this.thinkingBuffer = '';
-      this.lastFlushTime = Date.now();
-    } else if (force) {
-      this.onFlush?.('', '');
+      if (!this.rafId) {
+        this.rafId = requestAnimationFrame(() => {
+          this.rafId = null;
+          this.onFlush?.(this.buffer, this.thinkingBuffer);
+          this.buffer = '';
+          this.thinkingBuffer = '';
+          this.lastFlushTime = Date.now();
+        });
+      }
     }
   }
 
@@ -306,10 +314,11 @@ export class StreamBuffer {
     };
   }
 
-  /**
-   * 清空缓冲区
-   */
   clear(): void {
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
     this.buffer = '';
     this.thinkingBuffer = '';
     this.lastFlushTime = 0;

@@ -8,8 +8,10 @@ import { ChatHeader } from './components/ChatHeader';
 import { MessageList } from './components/MessageList';
 import { InputArea } from './components/InputArea';
 import { Sidebar } from './components/Sidebar';
+import { TabBar } from './components/TabBar';
 import { ConnectionManager, StreamBuffer } from '../../core/agent/ConnectionManager';
 import { QuickToolSelection } from './components/ToolQuickPicker';
+import { TabManager, Tab } from './TabManager';
 
 export const VIEW_TYPE_OPENCODE = 'opensidian-chat-view';
 
@@ -23,12 +25,13 @@ export class OpensidianView extends ItemView {
   
   private currentConversationId: string | null = null;
   private isStreaming = false;
-  private messages: ChatMessage[] = [];
   
   private header!: ChatHeader;
   private messageList!: MessageList;
   private inputArea!: InputArea;
   private sidebar!: Sidebar;
+  private tabBar!: TabBar;
+  private tabManager!: TabManager;
   
   private connectionManager!: ConnectionManager;
   private streamBuffer!: StreamBuffer;
@@ -41,6 +44,11 @@ export class OpensidianView extends ItemView {
     this.plugin = plugin;
     this.currentMode = plugin.settings.agentMode;
     
+    this.tabManager = new TabManager();
+    this.tabManager.setCallbacks({
+      onTabSwitched: (_id) => this.onTabSwitched(),
+    });
+    
     this.connectionManager = new ConnectionManager({
       maxRetries: 3,
       retryDelay: 1000,
@@ -50,6 +58,18 @@ export class OpensidianView extends ItemView {
     
     this.streamBuffer = new StreamBuffer();
     this.setupConnectionListeners();
+  }
+
+  private get messages(): ChatMessage[] {
+    return this.tabManager.getActiveTab()?.messages || [];
+  }
+
+  private set messages(msgs: ChatMessage[]) {
+    const tab = this.tabManager.getActiveTab();
+    if (tab) {
+      tab.messages = msgs;
+      tab.updatedAt = Date.now();
+    }
   }
 
   private getLang(): Language {
@@ -78,6 +98,9 @@ export class OpensidianView extends ItemView {
     this.headerContainer = mainContent.createDiv();
     this.createHeader();
     
+    const tabBarContainer = mainContent.createDiv({ cls: 'opensidian-tab-bar-container' });
+    this.createTabBar(tabBarContainer);
+    
     this.messagesContainer = mainContent.createDiv({ cls: 'opensidian-messages' });
     this.createMessageList();
     
@@ -102,6 +125,28 @@ export class OpensidianView extends ItemView {
       onDeleteSessions: (ids) => this.deleteSessions(ids),
     });
     this.sidebar.render();
+  }
+
+  private createTabBar(container: HTMLElement): void {
+    this.tabBar = new TabBar(container, this.tabManager, {
+      onTabClick: (id) => {
+        this.tabManager.switchTab(id);
+      },
+      onNewTab: () => {
+        const tab = this.tabManager.createTab('New Chat', this.plugin.openCodeService.getActiveModel(), this.currentMode);
+        this.messageList.clear();
+        this.messageList.addWelcomeMessage();
+      },
+    });
+    this.tabBar.render();
+  }
+
+  private onTabSwitched(): void {
+    const tab = this.tabManager.getActiveTab();
+    if (!tab) return;
+    this.currentMode = tab.mode;
+    this.messageList.setMessages(tab.messages);
+    this.header.setMode(tab.mode);
   }
 
   private createHeader(): void {
@@ -184,13 +229,16 @@ export class OpensidianView extends ItemView {
   }
 
   private async loadConversation(): Promise<void> {
-    this.messages = [];
+    if (this.tabManager.getTabCount() === 0) {
+      this.tabManager.createTab('Chat', this.plugin.openCodeService.getActiveModel(), this.currentMode);
+    }
     this.messageList.clear();
     this.messageList.addWelcomeMessage();
   }
 
   private async sendMessage(text: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]): Promise<void> {
     if (this.isStreaming) return;
+    console.log('[Opensidian] sendMessage called, text:', text.substring(0, 50));
     
     const lang = this.plugin.settings.language;
     
@@ -267,7 +315,8 @@ export class OpensidianView extends ItemView {
         systemPrompt,
         stream: true,
         thinking: this.plugin.settings.showThinking,
-        attachments: attachments.length > 0 ? attachments : undefined
+        attachments: attachments.length > 0 ? attachments : undefined,
+        sessionId: this.tabManager.getActiveTab()?.sessionId
       });
 
       for await (const chunk of stream) {
@@ -366,21 +415,28 @@ export class OpensidianView extends ItemView {
         systemPrompt,
         stream: true,
         thinking: this.plugin.settings.showThinking,
-        attachments: attachments.length > 0 ? attachments : undefined
+        attachments: attachments.length > 0 ? attachments : undefined,
+        sessionId: this.tabManager.getActiveTab()?.sessionId
       });
       
       const assistantContainer = this.messageList.createStreamingMessage(this.generateId());
       let fullContent = '';
       let thinkingContent = '';
+
+      const streamBuffer = new StreamBuffer((content, thinking) => {
+        if (content) fullContent += content;
+        if (thinking) thinkingContent += thinking;
+        this.messageList.updateStreamingMessage(assistantContainer, fullContent, thinkingContent, false);
+        this.messageList.updateThinking(assistantContainer, thinkingContent);
+      }, { flushInterval: 120, maxBufferSize: 2000 });
       
       for await (const chunk of stream) {
         if (chunk.type === 'text' && chunk.content) {
-          fullContent += chunk.content;
-          this.messageList.updateStreamingMessage(assistantContainer, fullContent, thinkingContent, false);
+          streamBuffer.appendText(chunk.content);
         } else if (chunk.type === 'thinking' && chunk.content) {
-          thinkingContent += chunk.content;
-          this.messageList.updateThinking(assistantContainer, thinkingContent);
+          streamBuffer.appendThinking(chunk.content);
         } else if (chunk.type === 'tool_call' && chunk.toolCall) {
+          streamBuffer.flush(true);
           this.messageList.addToolCall(assistantContainer, chunk.toolCall);
         } else if (chunk.type === 'tool_result' && chunk.toolCall) {
           this.messageList.updateToolResult(assistantContainer, chunk.toolCall);
@@ -388,10 +444,12 @@ export class OpensidianView extends ItemView {
           this.messageList.showErrorMessage(assistantContainer, chunk.error || t('error', lang));
           break;
         } else if (chunk.type === 'done') {
+          streamBuffer.flush(true);
           break;
         }
       }
 
+      streamBuffer.flush(true);
       this.messageList.updateStreamingMessage(assistantContainer, fullContent, thinkingContent, true);
       
       const assistantMessage: ChatMessage = {
