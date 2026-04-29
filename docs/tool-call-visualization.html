@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent 执行轨迹 — Claudian Style</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: { extend: { animation: {
+    'slide-in': 'slideIn .3s ease-out',
+    'fade-up': 'fadeUp .2s ease-out',
+    'pulse-dot': 'pulseDot 1.5s ease-in-out infinite',
+    'spin-slow': 'spin 1.2s linear infinite',
+    'blink': 'blink .8s ease-in-out infinite',
+  }, keyframes: {
+    slideIn: { from: { opacity:'0', transform:'translateX(-12px)' }, to: { opacity:'1', transform:'translateX(0)' } },
+    fadeUp: { from: { opacity:'0', transform:'translateY(8px)' }, to: { opacity:'1', transform:'translateY(0)' } },
+    pulseDot: { '0%,100%': { opacity:'.3' }, '50%': { opacity:'1' } },
+    blink: { '0%,100%': { opacity:'1' }, '50%': { opacity:'0' } },
+  }}}
+}
+</script>
+<style>
+  body { background:#1a1a2e; color:#cdd6f4; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif; }
+  .glass { background:rgba(40,40,64,.7); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px); }
+  .card { background:#282840; border:1px solid #45475a; border-radius:10px; transition:all .2s ease; }
+  .card:hover { background:#303050; border-color:#585b70; }
+  .diff-add { color:#a6e3a1; background:rgba(34,197,94,.1); }
+  .diff-del { color:#f38ba8; background:rgba(239,68,68,.1); }
+  .diff-line { font-family:'JetBrains Mono','Fira Code',monospace; font-size:11px; padding:1px 6px; white-space:pre-wrap; }
+  .scrollbar::-webkit-scrollbar { width:4px; }
+  .scrollbar::-webkit-scrollbar-thumb { background:#45475a; border-radius:2px; }
+  ::selection { background:rgba(245,158,11,.3); }
+</style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+
+<div id="root" class="w-full max-w-2xl"></div>
+
+<script type="importmap">
+{ "imports": { "react": "https://esm.sh/react@18", "react-dom/client": "https://esm.sh/react-dom@18/client", "lucide-react": "https://esm.sh/lucide-react@0.344.0" } }
+</script>
+
+<script type="module">
+import React,{useState,useEffect,useRef,useCallback}from'react';
+import{createRoot}from'react-dom/client';
+import{
+  FileText,Edit3,Play,Trash2,Search,CheckCircle2,XCircle,Loader2,Clock,
+  Copy,ChevronDown,ChevronRight,Zap,Terminal,Code2,BrainCircuit
+}from'lucide-react';
+
+// ─── Types ───
+const ToolStatus={PENDING:'pending',RUNNING:'running',SUCCESS:'success',ERROR:'error'};
+const ToolType={READ:'read',EDIT:'edit',RUN:'run',DELETE:'delete',SEARCH:'search'};
+
+const ToolConfig={
+  [ToolType.READ]:{icon:FileText,label:'Read',color:'#a78bfa',bg:'rgba(167,139,250,.12)'},
+  [ToolType.EDIT]:{icon:Edit3,label:'Edit',color:'#f59e0b',bg:'rgba(245,158,11,.12)'},
+  [ToolType.RUN]:{icon:Play,label:'Run',color:'#3b82f6',bg:'rgba(59,130,246,.12)'},
+  [ToolType.DELETE]:{icon:Trash2,label:'Delete',color:'#ef4444',bg:'rgba(239,68,68,.12)'},
+  [ToolType.SEARCH]:{icon:Search,label:'Search',color:'#22c55e',bg:'rgba(34,197,94,.12)'},
+};
+
+const StatusConfig={
+  [ToolStatus.PENDING]:{icon:Clock,color:'#6c7086',anim:''},
+  [ToolStatus.RUNNING]:{icon:Loader2,color:'#3b82f6',anim:'animate-spin-slow'},
+  [ToolStatus.SUCCESS]:{icon:CheckCircle2,color:'#22c55e',anim:''},
+  [ToolStatus.ERROR]:{icon:XCircle,color:'#ef4444',anim:''},
+};
+
+// ─── Sample Data ───
+const sampleSteps = [
+  { id:'think-1', type:'thinking', timestamp:1712345600, duration:2.3,
+    content:`正在分析用户需求...
+- 目标：整理 Obsidian 笔记库
+- 策略：先搜索相关笔记，再读取关键文件，最后执行编辑
+- 工具：read_note, search_notes, write_note` },
+  { id:'tool-1', type:'tool', toolType:ToolType.SEARCH, status:ToolStatus.SUCCESS,
+    timestamp:1712345602, target:'vault:/Projects/', duration:.8,
+    summary:'找到 3 个匹配文件', details:{ files:['project-alpha.md','meeting-notes.md','roadmap.md'] } },
+  { id:'tool-2', type:'tool', toolType:ToolType.READ, status:ToolStatus.SUCCESS,
+    timestamp:1712345603, target:'frontmatter.md', duration:.4,
+    summary:'读取 1.2KB', details:{ content:'---\ntitle:项目笔记\ntags:[important, active]\n---\n\n# 项目概览...' } },
+  { id:'thinking-block', type:'thinking-block', timestamp:1712345604,
+    content:'根据读取的前置信息和搜索结果，我发现在 `project-alpha.md` 中有一个待办事项列表需要更新。让我执行编辑操作。' },
+  { id:'tool-3', type:'tool', toolType:ToolType.EDIT, status:ToolStatus.SUCCESS,
+    timestamp:1712345605, target:'project-alpha.md', duration:1.1,
+    summary:'+15 -3', diffLines:[
+      {type:'context',text:'## 本周任务'},
+      {type:'add',text:'+ - [x] 完成 API 文档更新'},
+      {type:'add',text:'+ - [x] 修复登录页面样式'},
+      {type:'add',text:'+ - [ ] 部署到 staging 环境'},
+      {type:'context',text:'## 备注'},
+      {type:'del',text:'- 等待 QA 反馈（已完成）'},
+      {type:'del',text:'- 联系后端团队确认接口'},
+      {type:'add',text:'+ QA 已通过所有测试用例'},
+      {type:'add',text:'+ 后端接口已确认，数据格式 v2'},
+      {type:'context',text:'## 下次会议'},
+      {type:'add',text:'+ - 4/28 下午 3:00 — Sprint Review'},
+    ] },
+  { id:'tool-4', type:'tool', toolType:ToolType.RUN, status:ToolStatus.ERROR,
+    timestamp:1712345607, target:'git push', duration:3.2,
+    summary:'权限拒绝', details:{ error:'Permission denied (publickey).\nfatal: Could not read from remote repository.' } },
+  { id:'sum', type:'summary', timestamp:1712345610,
+    stats:{ total:4, success:3, failed:1, duration:7.8 } },
+];
+
+// ─── Components ───
+
+function StatusIcon({status}){
+  const cfg=StatusConfig[status]||StatusConfig[ToolStatus.PENDING];
+  const I=cfg.icon;
+  return React.createElement(I,{size:14,color:cfg.color,className:cfg.anim,strokeWidth:2.5});
+}
+
+function ToolIcon({toolType}){
+  const cfg=ToolConfig[toolType]||ToolConfig[ToolType.READ];
+  const I=cfg.icon;
+  return React.createElement('div',{
+    className:'flex items-center justify-center rounded-md',
+    style:{width:28,height:28,background:cfg.bg,flexShrink:0}
+  }, React.createElement(I,{size:15,color:cfg.color,strokeWidth:2}));
+}
+
+function ThinkingStep({step}){
+  const [elapsed,setElapsed]=useState(0);
+  useEffect(()=>{
+    if(step.duration)return;
+    const i=setInterval(()=>setElapsed(p=>p+.1),100);
+    return ()=>clearInterval(i);
+  },[step.duration]);
+
+  const displayTime=step.duration?`${step.duration.toFixed(1)}s`: `${elapsed.toFixed(1)}s`;
+
+  return React.createElement('div',{className:'flex gap-3 py-3 animate-slide-in'},
+    React.createElement('div',{className:'flex flex-col items-center'},
+      React.createElement('div',{className:'w-5 h-5 rounded-full flex items-center justify-center',style:{background:'rgba(245,158,11,.15)'}},
+        React.createElement(BrainCircuit,{size:12,color:'#f59e0b'})
+      ),
+      React.createElement('div',{className:'w-px flex-1 mt-1',style:{background:'linear-gradient(#f59e0b33,transparent)'}})
+    ),
+    React.createElement('div',{className:'flex-1 min-w-0'},
+      React.createElement('div',{className:'flex items-center gap-2 mb-2'},
+        React.createElement('span',{className:'text-xs font-semibold',style:{color:'#f59e0b'}},'🤔 Thinking...'),
+        React.createElement('span',{className:'text-xs',style:{color:'#6c7086'}},displayTime)
+      ),
+      React.createElement('div',{className:'text-xs leading-relaxed rounded-lg p-3',style:{color:'#cdd6f4',background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.15)'}},
+        step.content.split('\n').map((line,i)=>
+          React.createElement('div',{key:i,className:line.startsWith('-')?'pl-3 text-xs':line.startsWith('#')?'font-semibold text-sm mb-1':'text-xs',style:{color:line.startsWith('#')?'#f59e0b':'#cdd6f4'}},line)
+        )
+      )
+    )
+  );
+}
+
+function ToolCallCard({step}){
+  const [expanded,setExpanded]=useState(false);
+  const cfg=ToolConfig[step.toolType]||ToolConfig[ToolType.READ];
+  const isEdit=step.toolType===ToolType.EDIT;
+
+  const hasDiff=step.diffLines&&step.diffLines.length>0;
+  const hasDetails=step.details&&Object.keys(step.details).length>0;
+  const expandable=hasDiff||hasDetails||(step.details?.error);
+
+  return React.createElement('div',{className:'flex gap-3 py-2 animate-slide-in'},
+    React.createElement('div',{className:'flex flex-col items-center'},
+      React.createElement(ToolIcon,{toolType:step.toolType}),
+      React.createElement('div',{className:'w-px flex-1 mt-1',style:{background:'linear-gradient(#45475a,transparent)'}})
+    ),
+    React.createElement('div',{className:'flex-1 min-w-0'},
+      React.createElement('div',{
+        className:`card p-3 cursor-${expandable?'pointer':'default'} transition-colors`,
+        onClick:()=>expandable&&setExpanded(!expanded)
+      },
+        React.createElement('div',{className:'flex items-center gap-3'},
+          React.createElement('span',{className:'text-xs font-semibold',style:{color:cfg.color}},cfg.label),
+          React.createElement(Code2,{size:12,color:'#6c7086'}),
+          React.createElement('span',{className:'text-xs font-mono truncate flex-1',style:{color:'#a6adc8'}},step.target||'—'),
+          isEdit&&step.summary&&React.createElement('span',{className:'text-xs font-mono px-2 py-0.5 rounded',style:{background:'rgba(34,197,94,.1)',color:'#22c55e'}},
+            React.createElement('span',{className:'diff-add'},step.summary.replace(/ .*/,'')),
+            React.createElement('span',{className:'diff-del ml-1'},step.summary.replace(/.* /,''))
+          ),
+          step.duration&&React.createElement('span',{className:'text-xs',style:{color:'#6c7086'}},`${step.duration.toFixed(1)}s`),
+          React.createElement(StatusIcon,{status:step.status}),
+          expandable&&React.createElement(ChevronDown,{size:14,color:'#6c7086',className:`transition-transform ${expanded?'rotate-180':''}`})
+        ),
+        !isEdit&&step.summary&&React.createElement('div',{className:'text-xs mt-1',style:{color:'#a6adc8'}},step.summary),
+      ),
+
+      expanded&&hasDiff&&React.createElement('div',{className:'mt-1 card overflow-hidden'},
+        React.createElement('div',{className:'px-3 py-2 text-xs font-semibold flex items-center gap-2',style:{color:'#a6adc8',background:'#1e1e2e',borderBottom:'1px solid #45475a'}},
+          React.createElement(FileText,{size:12}),step.target
+        ),
+        React.createElement('div',{className:'p-2'},
+          step.diffLines.map((dl,i)=>
+            React.createElement('div',{key:i,className:`diff-line ${dl.type==='add'?'diff-add':dl.type==='del'?'diff-del':''}`,style:{color:dl.type==='context'?'#6c7086':undefined}},dl.text)
+          )
+        )
+      ),
+
+      expanded&&hasDetails&&!step.details?.error&&React.createElement('div',{className:'mt-1 card p-3'},
+        React.createElement('pre',{className:'text-xs font-mono overflow-x-auto',style:{color:'#a6adc8'}},JSON.stringify(step.details,null,2))
+      ),
+
+      expanded&&step.details?.error&&React.createElement('div',{className:'mt-1 card p-3',style:{borderColor:'rgba(239,68,68,.3)',background:'rgba(239,68,68,.06)'}},
+        React.createElement('pre',{className:'text-xs font-mono',style:{color:'#f38ba8'}},step.details.error)
+      )
+    )
+  );
+}
+
+function ThinkingBlock({step}){
+  return React.createElement('div',{className:'flex gap-3 py-3 animate-fade-up'},
+    React.createElement('div',{className:'flex flex-col items-center'},
+      React.createElement('div',{className:'w-5 h-5 rounded-full flex items-center justify-center',style:{background:'rgba(167,139,250,.15)'}},
+        React.createElement(Zap,{size:12,color:'#a78bfa'})
+      ),
+      React.createElement('div',{className:'w-px flex-1 mt-1',style:{background:'linear-gradient(#a78bfa33,transparent)'}})
+    ),
+    React.createElement('div',{className:'flex-1 card p-3 text-xs leading-relaxed',style:{borderColor:'rgba(167,139,250,.2)'}},
+      step.content
+    )
+  );
+}
+
+function ExecutionSummary({step}){
+  const s=step.stats;
+  return React.createElement('div',{className:'flex gap-3 py-2 animate-fade-up'},
+    React.createElement('div',{className:'flex flex-col items-center'},
+      React.createElement('div',{className:'w-5 h-5 rounded-full flex items-center justify-center',style:{background:'rgba(34,197,94,.15)'}},
+        React.createElement(CheckCircle2,{size:12,color:'#22c55e'})
+      )
+    ),
+    React.createElement('div',{className:'flex-1 flex items-center gap-4 text-xs',style:{color:'#a6adc8'}},
+      React.createElement('span',null,'执行完成 · '),
+      React.createElement('span',{style:{color:'#22c55e'}},`${s.success} 成功`),
+      s.failed>0&&React.createElement('span',{style:{color:'#ef4444'}},`${s.failed} 失败`),
+      React.createElement('span',{style:{color:'#6c7086'}},`${s.total} 个操作`),
+      React.createElement('span',{style:{color:'#6c7086',marginLeft:'auto'}},`总耗时 ${s.duration.toFixed(1)}s`)
+    )
+  );
+}
+
+function App(){
+  const [steps,setSteps]=useState([]);
+  const [copied,setCopied]=useState(false);
+  const logRef=useRef(null);
+  const bottomRef=useRef(null);
+
+  useEffect(()=>{
+    let i=0;
+    const timer=setInterval(()=>{
+      if(i<sampleSteps.length){ setSteps(s=>[...s,sampleSteps[i]]); i++; }
+      else clearInterval(timer);
+    },400);
+    return ()=>clearInterval(timer);
+  },[]);
+
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:'smooth'}); },[steps]);
+
+  const copyLog=useCallback(()=>{
+    const text=steps.map(s=>{
+      if(s.type==='thinking')return `[思考 ${s.duration?.toFixed(1)}s] ${s.content}`;
+      if(s.type==='thinking-block')return `[分析] ${s.content}`;
+      if(s.type==='tool')return `[${s.toolType}] ${s.target} — ${s.status} (${s.duration?.toFixed(1)}s)`;
+      if(s.type==='summary')return `[完成] ${s.stats.success}/${s.stats.total} 成功，${s.stats.duration.toFixed(1)}s`;
+      return'';
+    }).filter(Boolean).join('\n');
+    navigator.clipboard.writeText(text);
+    setCopied(true); setTimeout(()=>setCopied(false),2000);
+  },[steps]);
+
+  return React.createElement('div',{className:'flex flex-col gap-1'},
+    React.createElement('div',{className:'flex items-center justify-between mb-4 px-1'},
+      React.createElement('div',{className:'flex items-center gap-2'},
+        React.createElement(Terminal,{size:18,color:'#a78bfa'}),
+        React.createElement('h1',{className:'text-sm font-semibold',style:{color:'#cdd6f4'}},'Execution Trace'),
+        React.createElement('span',{className:'text-xs px-2 py-0.5 rounded-full',style:{color:'#a78bfa',background:'rgba(167,139,250,.12)'}},
+          `Agent Session`
+        )
+      ),
+      React.createElement('button',{onClick:copyLog,className:'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all',style:{color:'#a6adc8',border:'1px solid #45475a',background:'#282840'},onMouseEnter:e=>{e.target.style.background='#303050';e.target.style.color='#cdd6f4'},onMouseLeave:e=>{e.target.style.background='#282840';e.target.style.color='#a6adc8'}},
+        React.createElement(Copy,{size:12}),copied?'已复制':'复制日志'
+      )
+    ),
+
+    React.createElement('div',{ref:logRef,className:'flex flex-col'},
+      steps.map(step=>{
+        if(step.type==='thinking')return React.createElement(ThinkingStep,{key:step.id,step});
+        if(step.type==='thinking-block')return React.createElement(ThinkingBlock,{key:step.id,step});
+        if(step.type==='tool')return React.createElement(ToolCallCard,{key:step.id,step});
+        if(step.type==='summary')return React.createElement(ExecutionSummary,{key:step.id,step});
+        return null;
+      })
+    ),
+    React.createElement('div',{ref:bottomRef})
+  );
+}
+
+createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>

@@ -103,10 +103,16 @@ export interface OpensidianSettings {
   customSystemPrompt: string;
   environmentVariables: string;
   enableDebugMode: boolean;
-  cliTimeout: number;  // CLI 超时时间（毫秒）
-  
-  // Obsidian CLI settings
-  obsidianCLI?: ObsidianCLIConfig;  // Obsidian CLI 配置
+  cliTimeout: number;
+  dailyPrompts: DailyPrompt[];
+  obsidianCLI?: ObsidianCLIConfig;
+}
+
+export interface DailyPrompt {
+  prompt: string;
+  skill?: string;
+  folder?: string;
+  fileName?: string;
 }
 
 export const DEFAULT_SETTINGS: OpensidianSettings = {
@@ -153,7 +159,8 @@ export const DEFAULT_SETTINGS: OpensidianSettings = {
   customSystemPrompt: '',
   environmentVariables: '',
   enableDebugMode: false,
-  cliTimeout: 300000,  // 默认 5 分钟超时
+  cliTimeout: 300000,
+  dailyPrompts: [],  // 默认 5 分钟超时
 };
 
 // OpenCode Zen 免费模型列表

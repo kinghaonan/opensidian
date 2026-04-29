@@ -23,6 +23,7 @@ export class TabManager {
   private activeTabId: string | null = null;
   private callbacks: TabEventCallbacks = {};
   private maxTabs = 10;
+  private snapshots: Map<string, ChatMessage[][]> = new Map();
 
   setCallbacks(callbacks: TabEventCallbacks): void {
     this.callbacks = callbacks;
@@ -102,5 +103,30 @@ export class TabManager {
 
   generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  }
+
+  saveSnapshot(tabId: string): void {
+    const tab = this.tabs.find(t => t.id === tabId);
+    if (!tab) return;
+    if (!this.snapshots.has(tabId)) {
+      this.snapshots.set(tabId, []);
+    }
+    this.snapshots.get(tabId)!.push([...tab.messages.map(m => ({ ...m }))]);
+  }
+
+  rewindToSnapshot(tabId: string, snapshotIndex: number): ChatMessage[] | null {
+    const snaps = this.snapshots.get(tabId);
+    if (!snaps || snapshotIndex < 0 || snapshotIndex >= snaps.length) return null;
+    const tab = this.tabs.find(t => t.id === tabId);
+    if (!tab) return null;
+    const restored = snaps[snapshotIndex];
+    tab.messages = restored;
+    tab.updatedAt = Date.now();
+    this.snapshots.set(tabId, snaps.slice(0, snapshotIndex + 1));
+    return restored;
+  }
+
+  getSnapshotCount(tabId: string): number {
+    return this.snapshots.get(tabId)?.length || 0;
   }
 }

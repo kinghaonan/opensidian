@@ -239,6 +239,21 @@ export class OpensidianSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    // Theme
+    new Setting(containerEl)
+      .setName('Theme / 主题')
+      .setDesc('Auto follows system, Light/Dark forces the theme')
+      .addDropdown(dropdown => dropdown
+        .addOption('auto', 'Auto / 自动')
+        .addOption('light', 'Light / 亮色')
+        .addOption('dark', 'Dark / 暗色')
+        .setValue(this.plugin.settings.theme)
+        .onChange(async (value) => {
+          this.plugin.settings.theme = value as 'auto' | 'light' | 'dark';
+          await this.plugin.saveSettings();
+          (this.plugin as any).applyTheme();
+        }));
+
     // Auto Scroll
     new Setting(containerEl)
       .setName('Auto Scroll / 自动滚动')
@@ -391,6 +406,55 @@ export class OpensidianSettingTab extends PluginSettingTab {
           this.plugin.settings.enableDebugMode = value;
           await this.plugin.saveSettings();
         }));
+
+    // Daily Prompts
+    containerEl.createEl('h3', { text: '📅 Daily Tasks' });
+    
+    const dailyContainer = containerEl.createDiv({ cls: 'opensidian-daily-container' });
+    
+    const renderDailyTasks = () => {
+      dailyContainer.empty();
+      const tasks = this.plugin.settings.dailyPrompts || [];
+      
+      for (let i = 0; i < tasks.length; i++) {
+        const task = tasks[i];
+        const row = dailyContainer.createDiv({ cls: 'opensidian-daily-row' });
+        row.createSpan({ text: `任务 ${i + 1}`, cls: 'opensidian-daily-label' });
+        
+        const promptInput = row.createEl('input', { type: 'text', attr: { placeholder: '提示词', style: 'flex:2;' } });
+        promptInput.value = task.prompt || '';
+        promptInput.onchange = async () => { tasks[i].prompt = promptInput.value; await this.plugin.saveSettings(); };
+        
+        const skillInput = row.createEl('input', { type: 'text', attr: { placeholder: 'Skill (可选)', style: 'flex:1;' } });
+        skillInput.value = task.skill || '';
+        skillInput.onchange = async () => { tasks[i].skill = skillInput.value || undefined; await this.plugin.saveSettings(); };
+        
+        const folderInput = row.createEl('input', { type: 'text', attr: { placeholder: '文件夹', style: 'flex:1;' } });
+        folderInput.value = task.folder || '';
+        folderInput.onchange = async () => { tasks[i].folder = folderInput.value || undefined; await this.plugin.saveSettings(); };
+        
+        const fileInput = row.createEl('input', { type: 'text', attr: { placeholder: '文件名', style: 'flex:1;' } });
+        fileInput.value = task.fileName || '';
+        fileInput.onchange = async () => { tasks[i].fileName = fileInput.value || undefined; await this.plugin.saveSettings(); };
+        
+        const delBtn = row.createEl('button', { text: '−', cls: 'opensidian-daily-btn' });
+        delBtn.onclick = async () => {
+          this.plugin.settings.dailyPrompts = tasks.filter((_, idx) => idx !== i);
+          await this.plugin.saveSettings();
+          renderDailyTasks();
+        };
+      }
+      
+      const addBtn = dailyContainer.createEl('button', { text: '+ 添加任务', cls: 'opensidian-daily-add' });
+      addBtn.onclick = async () => {
+        if (!this.plugin.settings.dailyPrompts) this.plugin.settings.dailyPrompts = [];
+        this.plugin.settings.dailyPrompts.push({ prompt: '' });
+        await this.plugin.saveSettings();
+        renderDailyTasks();
+      };
+    };
+    
+    renderDailyTasks();
 
     // Status
     containerEl.createEl('h3', { text: 'Status' });

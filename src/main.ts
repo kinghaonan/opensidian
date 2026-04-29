@@ -28,6 +28,7 @@ export default class OpensidianPlugin extends Plugin {
     try {
       // Load settings
       await this.loadSettings();
+      this.applyTheme();
       
       // Initialize core services (with error handling)
       try {
@@ -95,6 +96,22 @@ export default class OpensidianPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+
+  applyTheme(): void {
+    const theme = this.settings.theme;
+    const body = document.body;
+    body.removeClass('opensidian-theme-light', 'opensidian-theme-dark');
+    
+    if (theme === 'light') {
+      body.addClass('opensidian-theme-light');
+      if (body.hasClass('theme-dark')) body.addClass('theme-dark');
+    } else if (theme === 'dark') {
+      body.addClass('opensidian-theme-dark');
+    } else {
+      body.toggleClass('opensidian-theme-dark', body.hasClass('theme-dark'));
+      body.toggleClass('opensidian-theme-light', !body.hasClass('theme-dark'));
+    }
   }
 
   private async initializeServices() {

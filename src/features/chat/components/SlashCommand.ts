@@ -49,7 +49,8 @@ export class SlashCommand {
       return;
     }
 
-    const isDark = document.body.classList.contains('theme-dark');
+    const isDark = document.body.classList.contains('theme-dark') && !document.body.classList.contains('opensidian-theme-light')
+      || document.body.classList.contains('opensidian-theme-dark');
     const bg = isDark ? '#2d2d2d' : '#ffffff';
     const text = isDark ? '#e0e0e0' : '#1a1a1a';
     const selBg = isDark ? '#3d3d3d' : '#e8e8ea';

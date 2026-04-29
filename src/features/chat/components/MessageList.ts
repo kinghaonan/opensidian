@@ -15,6 +15,7 @@ export class MessageList {
   private component: Component;
   private messages: ChatMessage[] = [];
   private thinkingElements: Map<string, HTMLElement> = new Map();
+  private thinkingTimers: Map<string, { startTime: number; interval: ReturnType<typeof setInterval> }> = new Map();
   private streamingRefs: Map<HTMLElement, StreamingRefs> = new Map();
   private onFileClick?: (file: TFile) => void;
   private scrollRafId: number | null = null;
@@ -220,22 +221,22 @@ export class MessageList {
       attr: { style: 'display: none;' }
     });
     const thinkingHeader = thinkingEl.createDiv({ cls: 'opensidian-thinking-header' });
-    thinkingHeader.innerHTML = `🤔 ${t('thinkingProcess', lang)}`;
+    const timerSpan = thinkingHeader.createSpan({ cls: 'opensidian-thinking-timer' });
+    const labelSpan = thinkingHeader.createSpan();
+    labelSpan.textContent = `🤔 ${t('thinkingProcess', lang)} `;
+    thinkingHeader.appendChild(timerSpan);
     const thinkingContent = thinkingEl.createDiv({ cls: 'opensidian-thinking-content' });
     thinkingHeader.onclick = () => thinkingEl.toggleClass('collapsed', !thinkingEl.hasClass('collapsed'));
     this.thinkingElements.set(id, thinkingContent);
+    this.thinkingTimers.set(id, { startTime: Date.now(), interval: setInterval(() => {
+      const elapsed = ((Date.now() - this.thinkingTimers.get(id)!.startTime) / 1000).toFixed(1);
+      timerSpan.textContent = `${elapsed}s`;
+    }, 100) });
 
     const contentEl = contentContainer.createDiv({ cls: 'opensidian-message-content opensidian-streaming' });
     contentEl.textContent = t('generating', lang);
 
-    const actionsEl = contentContainer.createDiv({ cls: 'opensidian-message-actions' });
-    this.renderActionButton(actionsEl, '📋', t('copy', lang), () => {
-      navigator.clipboard.writeText(contentEl.textContent || '');
-      new Notice(t('copied', lang));
-    });
-
     this.streamingRefs.set(contentContainer, { contentEl, thinkingEl, thinkingContentEl: thinkingContent });
-
     this.scrollToBottom();
     return contentContainer;
   }
@@ -247,6 +248,7 @@ export class MessageList {
       if (finalize) {
         contentEl.removeClass('opensidian-streaming');
         this.renderMarkdown(contentEl, content);
+        this.stopThinkingTimers(container);
       } else {
         contentEl.addClass('opensidian-streaming');
         contentEl.textContent = content;
@@ -255,9 +257,7 @@ export class MessageList {
 
     if (thinking && this.plugin.settings.showThinking) {
       const thinkingEl = refs?.thinkingEl ?? container.querySelector('.opensidian-thinking') as HTMLElement;
-      if (thinkingEl) {
-        thinkingEl.style.display = 'block';
-      }
+      if (thinkingEl) thinkingEl.style.display = 'block';
     }
 
     this.scrollToBottom();
@@ -266,14 +266,20 @@ export class MessageList {
   updateThinking(container: HTMLElement, thinking: string): void {
     const refs = this.streamingRefs.get(container);
     const thinkingContentEl = refs?.thinkingContentEl ?? container.querySelector('.opensidian-thinking-content');
-    if (thinkingContentEl) {
-      thinkingContentEl.textContent = thinking;
-    }
+    if (thinkingContentEl) thinkingContentEl.textContent = thinking;
 
     const thinkingEl = refs?.thinkingEl ?? container.querySelector('.opensidian-thinking') as HTMLElement;
-    if (thinkingEl && this.plugin.settings.showThinking) {
-      thinkingEl.style.display = 'block';
-    }
+    if (thinkingEl && this.plugin.settings.showThinking) thinkingEl.style.display = 'block';
+  }
+
+  private stopThinkingTimers(container: HTMLElement): void {
+    const refs = this.streamingRefs.get(container);
+    if (!refs) return;
+    const msgEl = (refs.contentEl.closest('[data-message-id]') as HTMLElement);
+    if (!msgEl) return;
+    const id = msgEl.getAttribute('data-message-id') || '';
+    const timer = this.thinkingTimers.get(id);
+    if (timer) { clearInterval(timer.interval); this.thinkingTimers.delete(id); }
   }
 
   showErrorMessage(container: HTMLElement, error: string): void {
@@ -328,22 +334,71 @@ export class MessageList {
     const lang = this.plugin.settings.language as Language;
     const welcome = this.container.createDiv({ cls: 'opensidian-message opensidian-welcome' });
 
-    const avatar = welcome.createDiv({ cls: 'opensidian-avatar' });
-    avatar.innerHTML = '🤖';
+    const icon = welcome.createDiv({ cls: 'opensidian-welcome-icon' });
+    icon.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>`;
 
-    const content = welcome.createDiv({ cls: 'opensidian-message-content' });
-    content.innerHTML = `
-      <p><strong>${t('welcomeTitle', lang)}</strong></p>
-      <p>${t('welcomeMessage', lang)}</p>
-      <ul>
-        <li>${t('welcomeTip1', lang)}</li>
-        <li>${t('welcomeTip2', lang)}</li>
-        <li>${t('welcomeTip3', lang)}</li>
-        <li>${t('welcomeTip4', lang)}</li>
-        <li>${t('welcomeTip5', lang)}</li>
-      </ul>
-      <p>${lang === 'zh' ? '当前模式' : 'Current mode'}: <strong>${this.plugin.settings.agentMode === 'plan' ? t('planMode', lang) : t('buildMode', lang)}</strong></p>
-    `;
+    const title = welcome.createEl('h2');
+    title.textContent = lang === 'zh' ? '有什么我可以帮助你的？' : 'How can I help you?';
+
+    const desc = welcome.createEl('p');
+    desc.textContent = lang === 'zh'
+      ? '我可以读取和编辑你的笔记，搜索知识库，帮你整理思路。'
+      : 'I can read and edit your notes, search your vault, and help organize your thoughts.';
+
+    const cards = welcome.createDiv({ cls: 'opensidian-welcome-cards' });
+
+    const suggestions = lang === 'zh' ? [
+      { icon: '📝', title: '整理笔记', desc: '帮我整理今天的笔记' },
+      { icon: '🔍', title: '搜索知识', desc: '搜索关于项目的所有笔记' },
+      { icon: '✏️', title: '创作内容', desc: '根据最近笔记写一篇总结' },
+      { icon: '💡', title: '头脑风暴', desc: '帮我理清思路和想法' },
+    ] : [
+      { icon: '📝', title: 'Organize Notes', desc: 'Help me organize today\'s notes' },
+      { icon: '🔍', title: 'Search Knowledge', desc: 'Search all notes about the project' },
+      { icon: '✏️', title: 'Create Content', desc: 'Write a summary from recent notes' },
+      { icon: '💡', title: 'Brainstorm', desc: 'Help me clarify my thoughts' },
+    ];
+
+    for (const s of suggestions) {
+      const card = cards.createDiv({ cls: 'opensidian-welcome-card' });
+      const cardIcon = card.createDiv({ cls: 'opensidian-welcome-card-icon' });
+      cardIcon.textContent = s.icon;
+      const cardTitle = card.createDiv({ cls: 'opensidian-welcome-card-title' });
+      cardTitle.textContent = s.title;
+      const cardDesc = card.createDiv();
+      cardDesc.textContent = s.desc;
+      card.onclick = () => document.dispatchEvent(new CustomEvent('opensidian:welcome-prompt', { detail: s.desc }));
+    }
+
+    const dailyPrompts = this.plugin.settings.dailyPrompts || [];
+    if (dailyPrompts.length > 0) {
+      const dailySection = welcome.createDiv({ cls: 'opensidian-welcome-daily' });
+      dailySection.createDiv({ cls: 'opensidian-welcome-daily-title', text: lang === 'zh' ? '📅 每日任务' : '📅 Daily' });
+      const dailyCards = welcome.createDiv({ cls: 'opensidian-welcome-cards' });
+      for (const dp of dailyPrompts) {
+        const label = (dp.prompt || '').substring(0, 40) + ((dp.prompt || '').length > 40 ? '…' : '');
+        const skillTag = dp.skill ? ` ⚡/${dp.skill}` : '';
+        const pathTag = dp.folder ? ` 📁${dp.folder}${dp.fileName ? '/' + dp.fileName : ''}` : '';
+        const card = dailyCards.createDiv({ cls: 'opensidian-welcome-card opensidian-welcome-card-daily' });
+        card.createDiv({ cls: 'opensidian-welcome-card-title', text: label + skillTag });
+        if (pathTag) card.createDiv({ style: 'font-size:10px;color:var(--os-text-muted);margin-top:2px;', text: pathTag });
+        card.onclick = () => {
+          let fullPrompt = dp.prompt || '';
+          if (dp.skill) fullPrompt = `/${dp.skill} ` + fullPrompt;
+          if (dp.folder) {
+            const vaultPath = (this.plugin.app.vault.adapter as any).basePath || '';
+            const filePath = dp.fileName ? `${dp.folder}/${dp.fileName}` : dp.folder;
+            fullPrompt = `在 ${filePath} ${dp.fileName ? '创建/更新' : '整理'}笔记。` + fullPrompt;
+          }
+          document.dispatchEvent(new CustomEvent('opensidian:daily-send', { detail: fullPrompt }));
+        };
+      }
+    }
+
+    const hint = welcome.createDiv({ cls: 'opensidian-welcome-hint' });
+    hint.textContent = lang === 'zh'
+      ? `当前模式：${this.plugin.settings.agentMode === 'plan' ? '计划' : '构建'} · 输入 @ 引用文件 · 输入 / 使用命令`
+      : `Mode: ${this.plugin.settings.agentMode} · Type @ to reference files · Type / for commands`;
   }
 
   addModeIndicator(mode: 'plan' | 'build'): void {
@@ -355,121 +410,172 @@ export class MessageList {
     this.scrollToBottom();
   }
 
-  /**
-   * 添加工具调用显示（可折叠）
-   */
   addToolCall(container: HTMLElement, toolCall: any): void {
     const lang = this.plugin.settings.language as Language;
-    
-    // 查找或创建工具调用容器
     const toolCallsEl = this.ensureToolCallsContainer(container, lang);
     const toolCallsList = toolCallsEl.querySelector('.opensidian-tool-calls-list') as HTMLElement;
-    
-    // 创建单个工具调用元素（添加可折叠支持）
-    const toolEl = toolCallsList.createDiv({ 
-      cls: 'opensidian-tool-call collapsed',  // 默认折叠
+
+    const toolType = this.classifyToolType(toolCall.name);
+    const toolEl = toolCallsList.createDiv({
+      cls: `opensidian-tool-call collapsed opensidian-tool-status-${toolCall.status === 'executing' ? 'running' : 'pending'}`,
       attr: { 'data-tool-id': toolCall.id }
     });
-    
-    // 工具名称和状态（点击可展开/折叠）
-    const header = toolEl.createDiv({ cls: 'opensidian-tool-header' });
-    header.style.cursor = 'pointer';
-    
-    // 状态图标
-    const statusIcon = header.createSpan({ cls: 'opensidian-tool-status' });
-    if (toolCall.status === 'executing') {
-      statusIcon.innerHTML = '⏳';
-      statusIcon.title = lang === 'zh' ? '执行中...' : 'Executing...';
-    } else {
-      statusIcon.innerHTML = '🔧';
-      statusIcon.title = lang === 'zh' ? '工具调用' : 'Tool Call';
-    }
-    
-    // 工具名称
+
+    const iconEl = toolEl.createDiv({ cls: `opensidian-tool-icon opensidian-tool-icon-${toolType}` });
+    iconEl.innerHTML = this.getToolIconSvg(toolType);
+
+    const bodyEl = toolEl.createDiv({ cls: 'opensidian-tool-body' });
+    const header = bodyEl.createDiv({ cls: 'opensidian-tool-header' });
+
+    const statusSpan = header.createSpan({ cls: 'opensidian-tool-status-icon' });
+    statusSpan.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`;
+
     const nameEl = header.createSpan({ cls: 'opensidian-tool-name' });
     nameEl.textContent = this.formatToolName(toolCall.name);
-    
-    // 展开/折叠指示器
-    const toggleEl = header.createSpan({ cls: 'opensidian-tool-toggle' });
-    toggleEl.innerHTML = '▶';
-    toggleEl.style.marginLeft = 'auto';
-    toggleEl.style.fontSize = '10px';
-    toggleEl.style.transition = 'transform 0.2s';
-    
-    // 内容容器（参数和结果）
+
+    this.renderToolTarget(header, toolCall);
+
+    const chevron = header.createSpan({ cls: 'opensidian-tool-chevron' });
+    chevron.innerHTML = '▶';
+
     const contentEl = toolEl.createDiv({ cls: 'opensidian-tool-content' });
-    
-    // 点击 header 切换折叠状态
-    header.onclick = () => {
-      toolEl.toggleClass('collapsed', !toolEl.hasClass('collapsed'));
-      toggleEl.style.transform = toolEl.hasClass('collapsed') ? 'rotate(0deg)' : 'rotate(90deg)';
-      if (!toolEl.hasClass('collapsed')) {
-        window.setTimeout(() => {
-          toolEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        }, 0);
-      }
-    };
-    
-    // 参数显示
     if (toolCall.arguments && Object.keys(toolCall.arguments).length > 0) {
-      const argsEl = contentEl.createDiv({ cls: 'opensidian-tool-arguments' });
-      this.renderToolArguments(argsEl, toolCall.name, toolCall.arguments);
+      this.renderToolArgumentsV2(contentEl, toolCall);
     }
 
+    header.onclick = (e) => {
+      e.stopPropagation();
+      const willBeCollapsed = !toolEl.hasClass('collapsed');
+      toolEl.toggleClass('collapsed', willBeCollapsed);
+      chevron.toggleClass('opensidian-tool-chevron-open', !willBeCollapsed);
+      if (!willBeCollapsed) {
+        window.setTimeout(() => toolEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
+      }
+    };
+
     this.updateToolCallsHeader(toolCallsEl, lang);
-    
     this.scrollToBottom();
   }
 
-  /**
-   * 更新工具调用结果
-   */
   updateToolResult(container: HTMLElement, toolCall: any): void {
     const lang = this.plugin.settings.language as Language;
-    
-    // 查找对应的工具调用元素
     const toolEl = container.querySelector(`[data-tool-id="${toolCall.id}"]`) as HTMLElement;
-    if (!toolEl) {
-      // 如果没找到，创建新的
-      this.addToolCall(container, toolCall);
-      return;
-    }
-    
-    // 更新状态图标
-    const statusIcon = toolEl.querySelector('.opensidian-tool-status') as HTMLElement;
+    if (!toolEl) { this.addToolCall(container, toolCall); return; }
+
+    const isSuccess = toolCall.status === 'completed';
+    const isFailed = toolCall.status === 'failed';
+    toolEl.removeClass('opensidian-tool-status-pending', 'opensidian-tool-status-running');
+    toolEl.addClass(isFailed ? 'opensidian-tool-status-error' : 'opensidian-tool-status-success');
+
+    const statusIcon = toolEl.querySelector('.opensidian-tool-status-icon') as HTMLElement;
     if (statusIcon) {
-      if (toolCall.status === 'completed') {
-        statusIcon.innerHTML = '✅';
-        statusIcon.title = lang === 'zh' ? '已完成' : 'Completed';
-      } else if (toolCall.status === 'failed') {
-        statusIcon.innerHTML = '❌';
-        statusIcon.title = lang === 'zh' ? '失败' : 'Failed';
+      if (isSuccess) {
+        statusIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>`;
+      } else if (isFailed) {
+        statusIcon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
       }
     }
-    
-    // 查找内容容器
+
     let contentEl = toolEl.querySelector('.opensidian-tool-content') as HTMLElement;
-    if (!contentEl) {
-      contentEl = toolEl.createDiv({ cls: 'opensidian-tool-content' });
-    }
-    
-    // 显示结果
+    if (!contentEl) { contentEl = toolEl.createDiv({ cls: 'opensidian-tool-content' }); }
+
     if (toolCall.result) {
-      let resultEl = contentEl.querySelector('.opensidian-tool-result') as HTMLElement;
-      if (!resultEl) {
-        resultEl = contentEl.createDiv({ cls: 'opensidian-tool-result' });
-      }
-      
-      this.renderToolResult(resultEl, toolCall.name, toolCall.result);
+      this.renderToolResultV2(contentEl, toolCall);
     }
-    
-    // 显示错误
     if (toolCall.error) {
-      const errorEl = contentEl.createDiv({ cls: 'opensidian-tool-error' });
-      errorEl.textContent = toolCall.error;
+      const errEl = contentEl.createDiv({ cls: 'opensidian-tool-error' });
+      errEl.textContent = toolCall.error;
     }
-    
+
+    const chevron = toolEl.querySelector('.opensidian-tool-chevron');
+    if (chevron) { chevron.innerHTML = '▶'; }
+
     this.scrollToBottom();
+  }
+
+  private classifyToolType(name: string): string {
+    const n = name.toLowerCase();
+    if (n.includes('read') || n.includes('get') || n.includes('open')) return 'read';
+    if (n.includes('write') || n.includes('edit') || n.includes('update') || n.includes('create') || n.includes('save')) return 'edit';
+    if (n.includes('run') || n.includes('exec') || n.includes('bash') || n.includes('shell') || n.includes('command')) return 'run';
+    if (n.includes('delete') || n.includes('remove') || n.includes('trash')) return 'delete';
+    if (n.includes('search') || n.includes('find') || n.includes('query') || n.includes('grep')) return 'search';
+    return 'run';
+  }
+
+  private getToolIconSvg(type: string): string {
+    const icons: Record<string, string> = {
+      read: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+      edit: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+      run: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+      delete: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+      search: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+    };
+    return icons[type] || icons.run;
+  }
+
+  private renderToolTarget(header: HTMLElement, toolCall: any): void {
+    const path = toolCall.arguments?.path || toolCall.arguments?.file || toolCall.arguments?.target || '';
+    if (path) {
+      const fileEl = header.createSpan({ cls: 'opensidian-tool-file' });
+      const codeEl = fileEl.createEl('code');
+      codeEl.textContent = typeof path === 'string' ? path : JSON.stringify(path);
+    }
+    if (toolCall.arguments?.pattern || toolCall.arguments?.query) {
+      const q = toolCall.arguments?.pattern || toolCall.arguments?.query;
+      const fileEl = header.createSpan({ cls: 'opensidian-tool-file' });
+      fileEl.textContent = typeof q === 'string' ? q : JSON.stringify(q);
+    }
+  }
+
+  private renderToolArgumentsV2(container: HTMLElement, toolCall: any): void {
+    const args = toolCall.arguments || {};
+    if (toolCall.name === 'file_change' || toolCall.name === 'write_note' || toolCall.name === 'read_note') {
+      if (args.path) {
+        const div = container.createDiv({ cls: 'opensidian-tool-diff-header' });
+        div.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ${args.path}`;
+        container.createDiv({ cls: 'opensidian-tool-arguments' }).textContent = JSON.stringify(args, null, 2);
+      }
+    } else {
+      const argsEl = container.createDiv({ cls: 'opensidian-tool-arguments' });
+      for (const [key, value] of Object.entries(args)) {
+        const line = argsEl.createDiv();
+        line.innerHTML = `<span class="opensidian-tool-arg-label">${key}:</span> ${typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}`;
+      }
+    }
+  }
+
+  private renderToolResultV2(container: HTMLElement, toolCall: any): void {
+    if (toolCall.name === 'file_change') {
+      if (toolCall.result?.diff) {
+        const header = container.createDiv({ cls: 'opensidian-tool-diff-header' });
+        header.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Diff`;
+        const linesEl = container.createDiv({ cls: 'opensidian-tool-diff-lines' });
+        const diffText = toolCall.result.diff;
+        if (typeof diffText === 'string') {
+          diffText.split('\n').forEach(line => {
+            const l = linesEl.createDiv({ cls: 'opensidian-tool-diff-line' });
+            if (line.startsWith('+')) { l.addClass('opensidian-tool-diff-added'); l.textContent = line; }
+            else if (line.startsWith('-')) { l.addClass('opensidian-tool-diff-removed'); l.textContent = line; }
+            else { l.addClass('opensidian-tool-diff-context'); l.textContent = line; }
+          });
+        }
+        return;
+      }
+      if (toolCall.result?.path) {
+        const div = container.createDiv({ cls: 'opensidian-tool-arguments' });
+        div.textContent = `File: ${toolCall.result.path}`;
+        return;
+      }
+    }
+    const resultEl = container.createDiv({ cls: 'opensidian-tool-result' });
+    const str = typeof toolCall.result === 'object' ? JSON.stringify(toolCall.result, null, 2) : String(toolCall.result);
+    if (str.length > 300) {
+      const summary = str.substring(0, 300) + '...';
+      resultEl.innerHTML = `<details><summary>Result</summary><pre>${str}</pre></details>`;
+    } else {
+      resultEl.textContent = str;
+    }
   }
 
   private ensureToolCallsContainer(container: HTMLElement, lang: Language): HTMLElement {
@@ -478,23 +584,15 @@ export class MessageList {
       toolCallsEl = container.createDiv({ cls: 'opensidian-tool-calls' });
       toolCallsEl.dataset.collapsed = 'false';
       toolCallsEl.dataset.userToggled = 'false';
-
       const header = toolCallsEl.createDiv({ cls: 'opensidian-tool-calls-header' });
       header.createSpan({ cls: 'opensidian-tool-calls-title' });
-
-      const toggleBtn = header.createEl('button', {
-        cls: 'opensidian-tool-calls-toggle',
-        text: lang === 'zh' ? '收起' : 'Collapse'
-      });
+      const toggleBtn = header.createEl('button', { cls: 'opensidian-tool-calls-toggle', text: lang === 'zh' ? '收起' : 'Collapse' });
       toggleBtn.onclick = () => {
         toolCallsEl!.dataset.userToggled = 'true';
-        const shouldCollapse = toolCallsEl!.dataset.collapsed !== 'true';
-        this.toggleToolCalls(toolCallsEl as HTMLElement, shouldCollapse, lang);
+        this.toggleToolCalls(toolCallsEl as HTMLElement, toolCallsEl!.dataset.collapsed !== 'true', lang);
       };
-
       toolCallsEl.createDiv({ cls: 'opensidian-tool-calls-list' });
     }
-
     this.updateToolCallsHeader(toolCallsEl, lang);
     return toolCallsEl;
   }

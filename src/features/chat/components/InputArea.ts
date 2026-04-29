@@ -306,7 +306,14 @@ export class InputArea {
 
 
   focus(): void {
-    this.textarea.focus();
+    this.textarea?.focus();
+  }
+
+  setText(text: string): void {
+    if (this.textarea) {
+      this.textarea.value = text;
+      this.textarea.focus();
+    }
   }
 
   private async addAttachment(): Promise<void> {

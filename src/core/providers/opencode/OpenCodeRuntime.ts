@@ -629,6 +629,7 @@ export class OpenCodeRuntime implements ChatRuntime {
   }
 
   private async *queryViaCLI(prompt: string, options?: any): AsyncGenerator<StreamChunk> {
+    if (!this.opencodePath) throw new Error('OpenCode CLI not available');
     const model = options?.model || this.getActiveModel();
     const messages = this.buildMessages(prompt, options);
 
@@ -641,34 +642,42 @@ export class OpenCodeRuntime implements ChatRuntime {
       fs.writeFileSync(tempFile, JSON.stringify(requestData, null, 2));
       tempFileCreated = true;
 
-      const args = this.buildCLIArgs(options).join(' ');
+      const args = this.buildCLIArgs(options);
+      const argsStr = args.join(' ');
       const cmd = process.platform === 'win32'
-        ? `"${this.opencodePath}" ${args} < "${tempFile}"`
-        : `"${this.opencodePath}" ${args} < "${tempFile}"`;
+        ? `type "${tempFile}" | "${this.opencodePath}" ${argsStr}`
+        : `cat "${tempFile}" | "${this.opencodePath}" ${argsStr}`;
 
-      console.log('[OpenCodeRuntime] Executing:', cmd);
+      console.log('[OpenCodeRuntime] Streaming spawn:', cmd.substring(0, 120));
 
-      const { stdout, stderr } = await execAsync(cmd, {
+      const child = spawn(cmd, {
+        shell: true, windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe'],
         cwd: this.getCliCwd(),
         env: this.ensureCliRuntimeEnvironment(),
-        maxBuffer: 50 * 1024 * 1024,
-        timeout: this.plugin.settings.cliTimeout || 300000,
       });
 
-      if (stderr && !stderr.includes('DEBUG') && !stderr.includes('INFO')) {
-        console.warn('[OpenCodeRuntime] CLI stderr:', stderr.substring(0, 500));
-      }
+      const timeout = this.plugin.settings.cliTimeout || 300000;
+      const timeoutId = setTimeout(() => { try { child.kill('SIGTERM'); } catch {} }, timeout);
 
-      console.log('[OpenCodeRuntime] CLI stdout length:', stdout.length, 'first 300 chars:', stdout.substring(0, 300));
+      let stderr = '';
+      child.stderr.on('data', (data) => { stderr += data.toString(); });
 
-      const lines = stdout.trim().split('\n');
-      for (const line of lines) {
+      const rl = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
+      const exitPromise = new Promise<number>((resolve, reject) => {
+        child.on('error', (err) => { clearTimeout(timeoutId); reject(err); });
+        child.on('close', (code) => { clearTimeout(timeoutId); resolve(code ?? -1); });
+      });
+
+      let lineCount = 0;
+      for await (const line of rl) {
+        lineCount++;
         if (!line.trim()) continue;
         try {
           const event = JSON.parse(line.trim());
           if (event.type === 'error') {
             yield { type: 'error', error: event.error?.message || event.error || 'CLI error' };
-            return;
+            rl.close(); return;
           }
           if (event.type === 'reasoning' && event.part?.text) {
             yield { type: 'thinking', content: event.part.text };
@@ -678,29 +687,43 @@ export class OpenCodeRuntime implements ChatRuntime {
           }
           if (event.type === 'tool_use') {
             const part = event.part;
+            const toolId = part?.callID || `t-${Date.now()}`;
+            const toolName = part?.tool || part?.name || 'unknown';
+            const toolArgs = part?.state?.input || {};
+            const toolOutput = part?.state?.output;
+            const isCompleted = part?.state?.status === 'completed';
+
             yield {
-              type: part?.state?.output ? 'tool_result' : 'tool_call',
-              toolCall: {
-                id: part?.callID || `t-${Date.now()}`,
-                name: part?.tool || part?.name || 'unknown',
-                arguments: part?.state?.input || {},
-                status: part?.state?.status === 'completed' ? 'completed' : 'executing',
-                result: part?.state?.output || undefined,
-              },
+              type: 'tool_call',
+              toolCall: { id: toolId, name: toolName, arguments: toolArgs, status: isCompleted ? 'completed' : 'executing' },
             };
+
+            if (toolOutput !== undefined && toolOutput !== null) {
+              const parsedResult = typeof toolOutput === 'string' ? { output: toolOutput } : toolOutput;
+              yield {
+                type: 'tool_result',
+                toolCall: { id: toolId, name: toolName, arguments: toolArgs, status: isCompleted ? 'completed' : 'executing', result: parsedResult },
+              };
+            }
           }
           if (event.text && !event.type) yield { type: 'text', content: event.text };
         } catch {
-          const trimmed = line.trim();
-          if (trimmed && !trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-            yield { type: 'text', content: trimmed };
-          }
+          const t = line.trim();
+          if (t && !t.startsWith('{') && !t.startsWith('[')) yield { type: 'text', content: t };
         }
+      }
+      rl.close();
+      console.log('[OpenCodeRuntime] Streamed', lineCount, 'lines, stderr:', stderr.substring(0, 200));
+
+      const exitCode = await exitPromise;
+      if (exitCode !== 0) {
+        console.error('[OpenCodeRuntime] CLI error exit:', exitCode, 'stderr:', stderr.substring(0, 500));
+        throw new Error(`CLI exited ${exitCode}`);
       }
       yield { type: 'done' };
     } catch (error: any) {
-      console.error('[OpenCodeRuntime] CLI query failed:', error.message);
-      yield { type: 'error', error: error.message || 'CLI query failed' };
+      console.error('[OpenCodeRuntime] CLI streaming error:', error.message);
+      yield { type: 'error', error: error.message || 'CLI failed' };
     } finally {
       if (tempFileCreated && fs.existsSync(tempFile)) {
         try { fs.unlinkSync(tempFile); } catch {}

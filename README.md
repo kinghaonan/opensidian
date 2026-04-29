@@ -1,281 +1,208 @@
-# Opensidian
+# 🔮 Opensidian
 
-[English](#english) | [中文](#中文)
+> **OpenCode AI × Obsidian** — 实时流式 · 工具可视化 · 多标签并行 · MCP 集成
 
----
-
-<a href="https://github.com/kinghaonan/opensidian/stargazers">
-  <img alt="GitHub Stars" src="https://img.shields.io/github/stars/kinghaonan/opensidian?style=flat-square">
-</a>
-<a href="https://github.com/kinghaonan/opensidian/issues">
-  <img alt="GitHub Issues" src="https://img.shields.io/github/issues/kinghaonan/opensidian?style=flat-square">
-</a>
-<a href="https://github.com/kinghaonan/opensidian/blob/main/LICENSE">
-  <img alt="License" src="https://img.shields.io/github/license/kinghaonan/opensidian?style=flat-square">
-</a>
-
-## English
-
-### Overview
-
-Opensidian is a modern Obsidian plugin that embeds **OpenCode AI** directly inside your vault. It combines a fast chat UI with **Model Context Protocol (MCP)** tools, enabling safe, controlled reading and editing of your notes.
-
-### Highlights
-
-- **AI Chat in Obsidian**: Work with free, paid, or local models
-- **Context Awareness**: Automatic active-file context and `@filename` references
-- **Inline Editing**: Select text, describe changes, preview diffs, then apply
-- **MCP + Skills**: Tooling to read/write/search the vault plus OpenCode skills
-- **MCP/Skill Picker**: Search, filter, and group tools with instant selection
-- **Tool Call Collapsing**: Long tool sequences can be folded for clarity
-- **Streaming Optimizations**: Smooth long responses with throttled updates
-- **Safety Modes**: YOLO / Safe / Plan permission controls
-- **Multi-language UI**: English, Chinese, Japanese, Korean, and more
-
-### Installation
-
-1. Download the latest release from [GitHub Releases](https://github.com/kinghaonan/opensidian/releases)
-2. Extract to `.obsidian/plugins/opensidian/` in your vault
-3. Enable the plugin in **Settings → Community Plugins → Opensidian**
-
-### Requirements
-
-- Obsidian v1.8.9 or higher
-- Desktop only (Windows, macOS, Linux)
-- [OpenCode CLI](https://opencode.ai/) or OpenCode Zen API key
-
-### Quick Start
-
-1. **Configure OpenCode**
-   - Vault config: `opencode.json`
-   - Global config: `~/.config/opencode/opencode.json`
-2. **Open the Chat**
-   - Click the 🤖 icon in the left ribbon, or open via Command Palette
-3. **Start Chatting**
-   - Type your request, use `@filename`, attach files if needed
-
-### Features
-
-#### Chat Experience
-
-- Real-time streaming responses
-- Optimized long-task streaming (throttled updates, final Markdown render)
-- Thinking display toggle
-- Model selection and refresh
-- Tool summary shown with each message
-
-#### MCP Tools
-
-The assistant can call tools such as:
-
-| Tool              | Description                       | Example                           |
-| ----------------- | --------------------------------- | --------------------------------- |
-| `read_note`       | Read note content and frontmatter | "Read my meeting notes"           |
-| `write_note`      | Create or update notes            | "Create a new journal entry"      |
-| `search_notes`    | Search vault contents             | "Find all notes about Python"     |
-| `manage_tags`     | Add/remove tags                   | "Tag all TODO notes with #urgent" |
-| `get_vault_stats` | Get vault statistics              | "How many notes do I have?"       |
-
-#### MCP/Skill Picker
-
-- Search and filter tools
-- Grouped list with enabled/disabled status
-- Selected tools are shown above the input and in message history
-- Selection acts as a strong hint to the model to use those tools/skills
-
-#### Inline Editing
-
-- Highlight text in a note
-- Press `Ctrl+Shift+E` (Mac: `Cmd+Shift+E`)
-- Describe edits, preview diffs, apply or discard
-
-#### Safety Modes
-
-- **YOLO**: Execute without confirmation
-- **Safe** (Recommended): Confirm risky actions only
-- **Plan**: Confirm everything, never auto-run
-
-### Settings
-
-- Models: Free/paid/local, CLI path, timeout
-- UI: Language, font size, theme, auto-scroll
-- Safety: Permission mode, blocklist, excluded tags
-- History: Retention, max history, title generation
-
-### Troubleshooting
-
-**OpenCode CLI not found**
-
-- Verify `opencode --version`
-- Check CLI path in settings
-- Use auto-detect
-
-**Timeouts**
-
-- Increase CLI timeout
-- Reduce conversation history
-
-**Plugin not loading**
-
-- Restart Obsidian
-- Disable/enable the plugin
-- Check console for errors
-
-### Development
-
-```bash
-npm install
-npm run dev
-npm run build
-npm test
-npm run lint
-```
-
-### Release
-
-1. Run `npm run build`
-2. Upload `release/main.js`, `release/styles.css`, and `manifest.json` to GitHub Releases
-
-### License
-
-MIT License - see [LICENSE](LICENSE).
-
-### Acknowledgments
-
-- [OpenCode](https://opencode.ai/)
-- [Obsidian](https://obsidian.md/)
-- [MCP Protocol](https://modelcontextprotocol.io/)
-- [Claudian](https://github.com/YishenTu/claudian)
+[![Stars](https://img.shields.io/github/stars/kinghaonan/opensidian?style=flat-square)](https://github.com/kinghaonan/opensidian/stargazers)
+[![Issues](https://img.shields.io/github/issues/kinghaonan/opensidian?style=flat-square)](https://github.com/kinghaonan/opensidian/issues)
+[![License](https://img.shields.io/github/license/kinghaonan/opensidian?style=flat-square)](LICENSE)
 
 ---
 
-## 中文
+## 📸 Agent能力
 
-### 简介
+🏠 主界面
 
-Opensidian 是一款现代化 Obsidian 插件，把 **OpenCode AI** 直接集成到你的笔记库中。通过 **MCP（模型上下文协议）** 与技能系统，实现安全、可控的读写与智能协作。
+ ![主界面](screenshots/main.png) 
+💬 流式 + 思考过程 
+![流式](screenshots/streaming.png)
 
-### 核心亮点
+🛠 工具调用
+ ![工具](screenshots/tool-calls.png)
+📎 @mention 
+![mention](screenshots/mention.png) 
 
-- **Obsidian 内置 AI 聊天**
-- **上下文感知**：自动包含当前文件，支持 `@文件名`
-- **内联编辑**：选中文本，描述修改，预览差异后应用
-- **MCP 与 Skills**：读取、写入、搜索、管理笔记库
-- **MCP/Skill 选择器**：搜索、分组、即时选择与提示
-- **工具调用折叠**：长工具链自动折叠
-- **流式优化**：长任务更稳定，结尾再渲染 Markdown
-- **安全模式**：YOLO / 安全 / 计划
-- **多语言界面**
+⚡ Slash 
+ ![slash](screenshots/slash.png)
+ 📑 多标签 
+ ![标签](screenshots/tabs.png) 
 
-### 安装
+🔧 MCP/Skill 
+ ![MCP](screenshots/mcp-picker.png) 
+ 🌙 深色模式 
+ ![深色](screenshots/dark-mode.png) 
 
-1. 从 [GitHub Releases](https://github.com/kinghaonan/opensidian/releases) 下载最新版本
-2. 解压到 `.obsidian/plugins/opensidian/`
-3. 在 **设置 → 社区插件 → Opensidian** 启用
+ ⚙️ 设置 
+ ![设置](screenshots/settings.png)
+ 📅 Daily ![Daily](screenshots/daily.png) 
 
-### 运行要求
+> 目前不建议在聊天过程中切换标签页
 
-- Obsidian v1.8.9+
-- 仅桌面端（Windows/macOS/Linux）
-- [OpenCode CLI](https://opencode.ai/) 或 OpenCode Zen API Key
 
-### 快速开始
 
-1. **配置 OpenCode**
-   - Vault：`opencode.json`
-   - 全局：`~/.config/opencode/opencode.json`
-2. **打开聊天**
-   - 左侧工具栏 🤖 图标或命令面板
-3. **开始使用**
-   - 输入问题，使用 `@文件名`，可上传附件
+## 📖 目录
 
-### 功能说明
+- [安装部署](#-安装部署)
+- [功能详解](#-功能详解)
+- [设置项](#-设置项)
+- [架构](#-架构)
+- [开发贡献](#-开发贡献)
+- [更新日志](#-更新日志)
 
-#### 聊天体验
+---
 
-- 实时流式输出
-- 长任务流式优化
-- 思考过程显示
-- 模型切换
-- 工具摘要显示
+## 📦 安装部署
 
-#### MCP 工具
+### 从 Release 安装（推荐）
 
-| 工具              | 说明                         | 示例                      |
-| ----------------- | ---------------------------- | ------------------------- |
-| `read_note`       | 读取笔记与 frontmatter       | "读取会议记录"            |
-| `write_note`      | 创建或更新笔记               | "创建一条日记"            |
-| `search_notes`    | 搜索笔记库                   | "查找 Python 相关笔记"    |
-| `manage_tags`     | 管理标签                     | "给 TODO 加 #urgent"      |
-| `get_vault_stats` | 获取笔记库统计               | "我有多少条笔记？"        |
+1. 打开 [Releases](https://github.com/kinghaonan/opensidian/releases)
+2. 下载最新 `main.js`、`styles.css`、`manifest.json`
+3. 放入 `.obsidian/plugins/opensidian/`
+4. 设置 → 社区插件 → 启用 **Opensidian**
 
-#### MCP/Skill 选择器
-
-- 搜索与筛选
-- 分组展示启用状态
-- 选择后立即显示在输入区与聊天记录
-- 选择即提示模型优先调用
-
-#### 内联编辑
-
-- 选中文本
-- 快捷键 `Ctrl+Shift+E`（Mac：`Cmd+Shift+E`）
-- 预览差异并确认
-
-#### 安全模式
-
-- **YOLO**：无确认自动执行
-- **安全**（推荐）：危险操作确认
-- **计划**：所有操作需确认
-
-### 设置
-
-- 模型：免费/付费/本地，CLI 路径，超时
-- UI：语言、字号、主题、自动滚动
-- 安全：权限模式、命令黑名单、排除标签
-- 历史：保留天数、最大条数、标题生成
-
-### 常见问题
-
-**找不到 OpenCode CLI**
-
-- 执行 `opencode --version`
-- 检查设置中的 CLI 路径
-- 使用自动检测
-
-**超时**
-
-- 提高 CLI 超时时间
-- 减少对话历史
-
-**插件未加载**
-
-- 重启 Obsidian
-- 禁用后再启用
-- 查看控制台错误
-
-### 开发
+### 从源码构建
 
 ```bash
-npm install
-npm run dev
-npm run build
-npm test
-npm run lint
+git clone https://github.com/kinghaonan/opensidian.git && cd opensidian
+npm install && npm run build
+# 产物在 release/ → 复制到 .obsidian/plugins/opensidian/
 ```
 
-### 发布
+### 环境要求
 
-1. 运行 `npm run build`
-2. 将 `release/main.js`、`release/styles.css`、`manifest.json` 上传到 GitHub Releases
+| 项目 | 要求 |
+|------|------|
+| Obsidian | v1.8.9+ |
+| 平台 | Windows / macOS / Linux |
+| AI 引擎 | [OpenCode CLI](https://opencode.ai/) 或 Zen API Key |
+| Node | v18+（仅构建） |
 
-### 许可证
+---
 
-MIT License - 详见 [LICENSE](LICENSE)。
+## ✨ 功能详解
 
-### 致谢
+### 🤖 AI 对话
 
-- [OpenCode](https://opencode.ai/)
-- [Obsidian](https://obsidian.md/)
-- [MCP 协议](https://modelcontextprotocol.io/)
-- [Claudian](https://github.com/YishenTu/claudian)
+- 🔄 **真正流式**：spawn pipe 逐 token 显示，非批量
+- 🧠 **思考计时器**："Thinking Xs..." → 完成折叠
+- 🚀 **自动连接**：启动即初始化
+- 🔁 **自动续轮**：工具调用后自动继续（最多 3 轮）
+
+### 🛠 工具调用可视化
+
+| 类型 | 图标 | 动效 | 显示 |
+|------|:----:|------|------|
+| 📄 Read | 📄 | spinner→✓ | 文件名 |
+| ✏️ Write/Edit | ✏️ | spinner→✓ | `+X -Y` diff |
+| ▶️ Bash | ▶️ | spinner→✓/✗ | 命令摘要 |
+| 🔍 Search | 🔍 | spinner→✓ | 匹配模式 |
+
+- 🎯 卡片与文字真实穿插
+- 🎨 蓝(运行)/绿(成功)/红(失败)左边框
+
+### 📑 多标签
+
+| ➕ 新建 | 🔀 切换 | ❌ 关闭 | ✏️ 右键重命名 | 🤖 自动命名 |
+|------|------|------|------|------|
+
+### ⌨️ 输入
+
+- 📎 `@` → 文件夹层级找文件
+- ⚡ `/` → `/clear /new /plan /build /model /help`
+- 📅 **Daily** → 设置中配置提示词+Skill+路径，一键发送
+
+### 🔧 MCP & Skills
+
+- 🔍 自动发现 opencode.json MCP
+- 🌐 SSE/HTTP 外部服务器
+- 📂 扫描本地技能目录（24个内置）
+
+### 🎨 界面
+
+- 🎯 AI-Native + Swiss Modernism
+- ☀️🌙 亮/暗/自动主题
+- 🫧 液态玻璃弹窗
+- 📋 自由复制
+
+---
+
+## ⚙️ 设置项
+
+| 分类 | 选项 |
+|------|------|
+| 🧠 模型 | CLI路径 / API Key / 模型选择 / 超时 / 思考开关 |
+| 🎨 界面 | 语言 / 字号 / 主题 / 自动滚动 |
+| 📅 Daily | 每任务：提示词+Skill+文件夹+文件名 |
+| 🔒 安全 | YOLO/安全/计划 / 命令黑名单 |
+| 📜 历史 | 保留天数 / 最大条数 |
+| ⚙️ 高级 | 系统提示词 / 环境变量 / 调试 |
+
+---
+
+## 🏗 架构
+
+```
+src/
+├── core/
+│   ├── runtime/           # ChatRuntime 接口
+│   ├── providers/opencode/ # OpenCodeRuntime (800行)
+│   ├── agent/              # OpenCodeService facade (115行)
+│   ├── mcp/                # MCP + SSE/HTTP
+│   └── storage/            # 持久化 + 快照
+├── features/chat/
+│   ├── controllers/        # StreamController
+│   ├── rendering/          # Text/Thinking/ToolCall
+│   ├── components/         # 20+ UI组件
+│   └── TabManager.ts       # 多标签
+```
+
+---
+
+## 🛠 开发贡献
+
+### 环境搭建
+
+```bash
+git clone https://github.com/kinghaonan/opensidian.git
+cd opensidian && npm install
+npm run dev   # 开发模式
+npm run build # 生产构建
+npm test      # 测试
+npm run lint  # 代码检查
+```
+
+### 贡献流程
+
+1. **Fork** 本仓库 → 创建分支 `feature/xxx`
+2. 修改代码 → `npm run build` 验证
+3. 将 `release/` 复制到测试 Vault 的 `.obsidian/plugins/opensidian/`
+4. Obsidian 重载插件测试
+5. 提交 PR 到 `main`
+
+### 约定
+
+- 📝 注释和文档用**中文**
+- 🎨 camelCase · 2空格缩进
+- 🧪 新功能包含测试
+- 🔒 权限改动需审查
+
+---
+
+## 📝 更新日志
+
+**阶段一 · 性能**：自动连接 · RAF批处理 · DOM缓存 · SSE优先
+
+**阶段二 · 架构**：Runtime接口 · 单体拆解(2686→800行) · Facade · 多标签
+
+**阶段三 · 流式**：三层架构 · spawn管道 · 思考计时器 · 工具穿插 · 自动续轮
+
+**阶段四 · UI**：CSS重写 · 欢迎界面 · 主题切换 · @文件夹 · Slash · 右键重命名 · Daily · 历史
+
+---
+
+## 🙏 致谢
+
+[OpenCode](https://opencode.ai/) · [Obsidian](https://obsidian.md/) · [Claudian](https://github.com/YishenTu/claudian) · [MCP](https://modelcontextprotocol.io/)
+
+## 📄 许可证
+
+MIT

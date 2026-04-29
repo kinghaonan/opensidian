@@ -76,7 +76,7 @@ export class ToolQuickPicker {
       attr: { 'aria-label': lang === 'zh' ? '关闭' : 'Close' }
     });
     closeBtn.textContent = '×';
-    closeBtn.onclick = () => this.close();
+    closeBtn.onclick = (e) => { e.stopPropagation(); e.preventDefault(); this.close(); };
 
     // 渲染内容
     if (type === 'mcp') {
@@ -85,10 +85,14 @@ export class ToolQuickPicker {
       this.renderSkillsList(lang);
     }
 
-    // 点击外部关闭
-    setTimeout(() => {
-      document.addEventListener('click', this.handleOutsideClick);
-    }, 100);
+    // 点击空白处关闭
+    const clickHandler = (e: MouseEvent) => {
+      if (this.popupContainer && !this.popupContainer.contains(e.target as Node)) {
+        this.close();
+        document.removeEventListener('click', clickHandler);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', clickHandler), 10);
 
     this.boundKeydownHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -105,11 +109,6 @@ export class ToolQuickPicker {
     if (this.popupContainer) {
       this.popupContainer.remove();
       this.popupContainer = null;
-    }
-    document.removeEventListener('click', this.handleOutsideClick);
-    if (this.boundKeydownHandler) {
-      document.removeEventListener('keydown', this.boundKeydownHandler);
-      this.boundKeydownHandler = null;
     }
   }
 

@@ -9,6 +9,8 @@ export class Sidebar {
   private historyPanel?: HTMLElement;
   private historyCheckboxes: Map<string, HTMLInputElement> = new Map();
   private selectedHistoryIds: Set<string> = new Set();
+  private collapsed = true;
+  private collapseBtn?: HTMLButtonElement;
   
   private onLoadSession?: (sessionId: string) => void;
   private onNewConversation?: () => void;
@@ -32,6 +34,7 @@ export class Sidebar {
   render(): void {
     this.container.empty();
     const lang = this.plugin.settings.language;
+    this.container.addClass('opensidian-sidebar-collapsed');
 
     const header = this.container.createDiv({ cls: 'opensidian-sidebar-header' });
 
@@ -39,9 +42,10 @@ export class Sidebar {
       cls: 'opensidian-sidebar-collapse-btn',
       attr: { 'aria-label': t('toggleSidebar', lang) }
     });
-    collapseBtn.innerHTML = '◀';
-    collapseBtn.title = lang === 'zh' ? '折叠侧边栏' : 'Collapse sidebar';
+    collapseBtn.innerHTML = '▶';
+    collapseBtn.title = lang === 'zh' ? '展开历史' : 'Expand history';
     collapseBtn.onclick = () => this.toggle();
+    this.collapseBtn = collapseBtn;
 
     header.createEl('h4', { text: t('conversationHistory', lang) });
 
@@ -49,7 +53,7 @@ export class Sidebar {
       cls: 'opensidian-sidebar-btn',
       attr: { 'aria-label': t('newConversation', lang) }
     });
-    newChatBtn.innerHTML = '➕';
+    newChatBtn.innerHTML = '+';
     newChatBtn.title = lang === 'zh' ? '新建对话' : 'New conversation';
     newChatBtn.onclick = () => this.onNewConversation?.();
 
@@ -59,100 +63,71 @@ export class Sidebar {
 
   private async loadHistoryList(): Promise<void> {
     if (!this.historyPanel) return;
-
     this.historyPanel.empty();
     this.historyCheckboxes.clear();
     const lang = this.plugin.settings.language;
-
     const sessions = await this.plugin.storage.listSessions();
 
     if (sessions.length === 0) {
-      this.historyPanel.createDiv({ 
-        cls: 'opensidian-history-empty',
-        text: t('noHistoryFound', lang)
-      });
+      this.historyPanel.createDiv({ cls: 'opensidian-history-empty', text: lang === 'zh' ? '暂无历史' : 'No history' });
       return;
     }
 
     for (const sessionId of sessions) {
       const session = await this.plugin.storage.loadSession(sessionId);
       if (!session) continue;
-
       this.renderHistoryItem(session, lang);
     }
+
+    this.renderBatchToolbar(lang);
+  }
+
+  private renderBatchToolbar(lang: string): void {
+    if (!this.historyPanel) return;
+    const toolbar = this.historyPanel.createDiv({ cls: 'opensidian-history-toolbar' });
+    const selectAll = toolbar.createEl('button', { cls: 'opensidian-history-toolbar-btn', text: lang === 'zh' ? '全选' : 'Select All' });
+    selectAll.onclick = () => this.selectAll();
+    const deleteBtn = toolbar.createEl('button', { cls: 'opensidian-history-toolbar-btn opensidian-history-delete-selected', text: lang === 'zh' ? '删除选中' : 'Delete Selected' });
+    deleteBtn.onclick = () => this.deleteSelected();
   }
 
   private renderHistoryItem(session: SessionData, lang: Language): void {
     if (!this.historyPanel) return;
+    const item = this.historyPanel.createDiv({ cls: 'opensidian-history-item' });
+    item.onclick = () => this.onLoadSession?.(session.id);
 
-    const item = this.historyPanel.createDiv({ cls: 'opensidian-history-panel-item' });
+    const cb = item.createEl('input', { type: 'checkbox', cls: 'opensidian-history-item-cb' });
+    cb.onclick = (e) => e.stopPropagation();
+    cb.onchange = () => cb.checked ? this.selectedHistoryIds.add(session.id) : this.selectedHistoryIds.delete(session.id);
+    this.historyCheckboxes.set(session.id, cb);
 
-    const checkbox = item.createEl('input', {
-      type: 'checkbox',
-      cls: 'opensidian-history-checkbox',
-      attr: { 'data-session-id': session.id }
-    });
-    checkbox.checked = this.selectedHistoryIds.has(session.id);
-    checkbox.title = lang === 'zh' ? '选择删除' : 'Select for deletion';
-    checkbox.onchange = () => {
-      if (checkbox.checked) {
-        this.selectedHistoryIds.add(session.id);
-      } else {
-        this.selectedHistoryIds.delete(session.id);
-      }
-    };
-    this.historyCheckboxes.set(session.id, checkbox);
+    const info = item.createDiv({ cls: 'opensidian-history-item-info' });
+    info.createDiv({ cls: 'opensidian-history-item-title', text: session.title || 'Untitled' });
+    info.createDiv({ cls: 'opensidian-history-item-date', text: this.formatDate(session.updatedAt) });
 
-    const content = item.createDiv({ cls: 'opensidian-history-item-content' });
-    content.createDiv({ 
-      cls: 'opensidian-history-title',
-      text: session.title || 'Untitled'
-    });
-    content.createDiv({ 
-      cls: 'opensidian-history-date',
-      text: this.formatDate(session.updatedAt)
-    });
-
-    content.onclick = () => this.onLoadSession?.(session.id);
-
-    const deleteBtn = item.createEl('button', { 
-      cls: 'opensidian-history-delete-btn',
-      attr: { 'aria-label': t('deleteConversation', lang) }
-    });
-    deleteBtn.innerHTML = '🗑️';
-    deleteBtn.title = lang === 'zh' ? '删除对话' : 'Delete conversation';
-    deleteBtn.onclick = async (e) => {
+    const del = item.createEl('button', { cls: 'opensidian-history-item-del' });
+    del.innerHTML = '×';
+    del.onclick = async (e) => {
       e.stopPropagation();
-      if (confirm(t('deleteConfirm', lang))) {
-        await this.plugin.storage.deleteSession(session.id);
-        new Notice(t('sessionDeleted', lang));
-        await this.loadHistoryList();
-      }
+      await this.plugin.storage.deleteSession(session.id);
+      await this.loadHistoryList();
     };
   }
 
   toggle(): void {
-    this.container.classList.toggle('opensidian-sidebar-collapsed');
-    const collapseBtn = this.container.querySelector('.opensidian-sidebar-collapse-btn');
-    if (collapseBtn) {
-      collapseBtn.innerHTML = this.container.classList.contains('opensidian-sidebar-collapsed') ? '▼' : '◀';
+    this.collapsed = !this.collapsed;
+    if (this.collapsed) {
+      this.container.addClass('opensidian-sidebar-collapsed');
+    } else {
+      this.container.removeClass('opensidian-sidebar-collapsed');
+    }
+    if (this.collapseBtn) {
+      this.collapseBtn.innerHTML = this.collapsed ? '▶' : '◀';
     }
   }
 
   expand(): void {
-    this.container.classList.remove('opensidian-sidebar-collapsed');
-    const collapseBtn = this.container.querySelector('.opensidian-sidebar-collapse-btn');
-    if (collapseBtn) {
-      collapseBtn.innerHTML = '◀';
-    }
-  }
-
-  collapse(): void {
-    this.container.classList.add('opensidian-sidebar-collapsed');
-    const collapseBtn = this.container.querySelector('.opensidian-sidebar-collapse-btn');
-    if (collapseBtn) {
-      collapseBtn.innerHTML = '▼';
-    }
+    if (this.collapsed) this.toggle();
   }
 
   selectAll(): void {
