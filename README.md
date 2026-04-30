@@ -15,13 +15,11 @@
 
 <h2 id="english">🇬🇧 English</h2>
 
-## 📸 Screenshots
+## 🎨 Interface Overview
 
-<p align="center"><img src="screenshots/main.png" width="45%"/>&nbsp;<img src="screenshots/streaming.png" width="45%"/><br><sup>Main &nbsp;|&nbsp; Streaming + Thinking</sup></p>
-<p align="center"><img src="screenshots/tool-calls.png" width="45%"/>&nbsp;<img src="screenshots/mention.png" width="45%"/><br><sup>Tool Calls &nbsp;|&nbsp; @mention</sup></p>
-<p align="center"><img src="screenshots/slash.png" width="30%"/>&nbsp;<img src="screenshots/tabs.png" width="30%"/>&nbsp;<img src="screenshots/mcp-picker.png" width="30%"/><br><sup>Slash &nbsp;|&nbsp; Multi-Tab &nbsp;|&nbsp; MCP Picker</sup></p>
-<p align="center"><img src="screenshots/dark-mode.png" width="45%"/>&nbsp;<img src="screenshots/settings.png" width="45%"/><br><sup>Dark Mode &nbsp;|&nbsp; Settings</sup></p>
-<p align="center"><img src="screenshots/daily.png" width="60%"/><br><sup>Daily Tasks</sup></p>
+> **Screenshots available on the [Releases page](https://github.com/kinghaonan/opensidian/releases)**
+
+Opensidian features a clean, claudian-inspired interface with a left sidebar for conversation history, a multi-tab chat area, and a floating input bar at the bottom. The welcome screen displays interactive suggestion cards and customizable daily task prompts. During conversations, the AI's thinking process appears as an orange collapsible block with a live timer, while tool calls (read, write, edit, bash, search) render as color-coded cards interleaved with the response text. A model selector dropdown, MCP/Skill picker, and slash command palette provide quick access to all features. Dark mode uses the Catppuccin Mocha palette with glass-morphism popups.
 
 ## 📦 Install
 
@@ -61,13 +59,11 @@ features/chat/controllers/ → rendering/ → components/
 
 <h2 id="chinese">🇨🇳 中文</h2>
 
-## 📸 截图
+## 🎨 界面概览
 
-<p align="center"><img src="screenshots/main.png" width="45%"/>&nbsp;<img src="screenshots/streaming.png" width="45%"/><br><sup>主界面 &nbsp;|&nbsp; 流式输出</sup></p>
-<p align="center"><img src="screenshots/tool-calls.png" width="45%"/>&nbsp;<img src="screenshots/mention.png" width="45%"/><br><sup>工具调用 &nbsp;|&nbsp; @mention</sup></p>
-<p align="center"><img src="screenshots/slash.png" width="30%"/>&nbsp;<img src="screenshots/tabs.png" width="30%"/>&nbsp;<img src="screenshots/mcp-picker.png" width="30%"/><br><sup>Slash &nbsp;|&nbsp; 多标签 &nbsp;|&nbsp; MCP</sup></p>
-<p align="center"><img src="screenshots/dark-mode.png" width="45%"/>&nbsp;<img src="screenshots/settings.png" width="45%"/><br><sup>深色模式 &nbsp;|&nbsp; 设置</sup></p>
-<p align="center"><img src="screenshots/daily.png" width="60%"/><br><sup>每日任务</sup></p>
+> **截图见 [Releases 页面](https://github.com/kinghaonan/opensidian/releases)**
+
+Opensidian 采用 claudian 风格的简洁界面：左侧边栏展示对话历史（默认收起），中央多标签聊天区，底部浮动输入栏。欢迎界面展示交互式建议卡片和可自定义的每日任务。AI 思考过程以橙色可折叠块显示并带有实时计时器，工具调用（读、写、编辑、运行、搜索）以彩色卡片穿插在回复文本中。模型下拉选择器、MCP/Skill 选择器和斜杠命令面板提供快速操作入口。深色模式使用 Catppuccin Mocha 配色，弹窗采用液态玻璃效果。
 
 ## 📦 安装
 
