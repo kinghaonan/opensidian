@@ -114,6 +114,7 @@ export class StreamController {
   private finalizeText(): void {
     if (!this.textEl || !this.fullText) return;
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { MarkdownRenderer, Component } = require('obsidian');
       const comp = new Component();
       this.textEl.empty();

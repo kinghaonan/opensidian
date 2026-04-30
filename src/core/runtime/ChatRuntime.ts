@@ -1,6 +1,6 @@
 import { StreamChunk, ChatMessage, ModelInfo } from '../types/chat';
 import { ProviderCapabilities, ProviderId } from '../providers/types';
-import { ChatTurnRequest, PreparedChatTurn, ChatRuntimeQueryOptions, RuntimeState, RuntimeStateListener } from './types';
+import { ChatTurnRequest, PreparedChatTurn, ChatRuntimeQueryOptions, RuntimeStateListener } from './types';
 
 export interface ToolInfo {
   name: string;

@@ -11,7 +11,7 @@ export interface ThinkingState {
   isExpanded: boolean;
 }
 
-export function createThinkingBlock(parentEl: HTMLElement, plugin: OpensidianPlugin): ThinkingState {
+export function createThinkingBlock(parentEl: HTMLElement, _plugin: OpensidianPlugin): ThinkingState {
   const wrapperEl = parentEl.createDiv({ cls: 'claudian-thinking-block' });
   const header = wrapperEl.createDiv({ cls: 'claudian-thinking-header' });
   header.setAttribute('tabindex', '0');

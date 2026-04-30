@@ -1,4 +1,4 @@
-import { TabManager, Tab } from '../TabManager';
+import { TabManager } from '../TabManager';
 
 export class TabBar {
   private container: HTMLElement;
@@ -12,7 +12,7 @@ export class TabBar {
   }
 
   render(): void {
-    try { this.container.empty(); } catch {}
+    try { this.container.empty(); } catch { /* DOM may be detached */ }
     this.container.addClass('opensidian-tab-bar');
 
     const tabs = this.tabManager.getTabs();

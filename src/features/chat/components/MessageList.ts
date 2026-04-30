@@ -386,7 +386,6 @@ export class MessageList {
           let fullPrompt = dp.prompt || '';
           if (dp.skill) fullPrompt = `/${dp.skill} ` + fullPrompt;
           if (dp.folder) {
-            const vaultPath = (this.plugin.app.vault.adapter as any).basePath || '';
             const filePath = dp.fileName ? `${dp.folder}/${dp.fileName}` : dp.folder;
             fullPrompt = `在 ${filePath} ${dp.fileName ? '创建/更新' : '整理'}笔记。` + fullPrompt;
           }
@@ -458,7 +457,6 @@ export class MessageList {
   }
 
   updateToolResult(container: HTMLElement, toolCall: any): void {
-    const lang = this.plugin.settings.language as Language;
     const toolEl = container.querySelector(`[data-tool-id="${toolCall.id}"]`) as HTMLElement;
     if (!toolEl) { this.addToolCall(container, toolCall); return; }
 
@@ -571,7 +569,6 @@ export class MessageList {
     const resultEl = container.createDiv({ cls: 'opensidian-tool-result' });
     const str = typeof toolCall.result === 'object' ? JSON.stringify(toolCall.result, null, 2) : String(toolCall.result);
     if (str.length > 300) {
-      const summary = str.substring(0, 300) + '...';
       resultEl.innerHTML = `<details><summary>Result</summary><pre>${str}</pre></details>`;
     } else {
       resultEl.textContent = str;

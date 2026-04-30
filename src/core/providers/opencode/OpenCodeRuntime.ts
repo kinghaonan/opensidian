@@ -8,9 +8,8 @@ import { ChatRuntime, ToolInfo } from '../../runtime/ChatRuntime';
 import { ProviderCapabilities, ProviderId } from '../types';
 import { OPENCODE_CAPABILITIES } from './OpenCodeCapabilities';
 import { ChatTurnRequest, PreparedChatTurn, ChatRuntimeQueryOptions, RuntimeState, RuntimeStateListener } from '../../runtime/types';
-import { StreamChunk, ChatMessage, ModelInfo, ImageAttachment } from '../../types/chat';
-import { FREE_MODELS, ZEN_MODELS, ModelInfo as SettingsModelInfo, getModelEndpoint } from '../../types/settings';
-import type { OpensidianSettings } from '../../types/settings';
+import { StreamChunk, ChatMessage, ModelInfo } from '../../types/chat';
+import { FREE_MODELS, ZEN_MODELS, getModelEndpoint } from '../../types/settings';
 import type OpensidianPlugin from '../../../main';
 
 const execAsync = promisify(exec);
@@ -250,7 +249,7 @@ export class OpenCodeRuntime implements ChatRuntime {
       const { stdout } = await execAsync(cmd, this.getCliExecOptions());
       const foundPath = stdout.trim().split('\n')[0]?.replace(/["\r\n]+/g, '').trim();
       if (foundPath) { this.opencodePath = foundPath; return; }
-    } catch {}
+    } catch { /* continue */ }
 
     const possiblePaths: string[] = [];
     if (process.platform === 'win32') {
@@ -391,7 +390,7 @@ export class OpenCodeRuntime implements ChatRuntime {
             this.availableModels.push(model);
           }
         }
-      } catch {}
+      } catch { /* continue */ }
     }
 
     if (this.plugin.settings.localModel.enabled) {
@@ -443,7 +442,6 @@ export class OpenCodeRuntime implements ChatRuntime {
   private getModelsFromConfig(): ModelInfo[] {
     const models: ModelInfo[] = [];
     if (!this.opencodeConfig) return models;
-    const providers = this.opencodeConfig.provider || {};
     const modelIds = new Set<string>();
     if (this.opencodeConfig.model) modelIds.add(this.opencodeConfig.model);
     if (this.opencodeConfig.small_model) modelIds.add(this.opencodeConfig.small_model);
@@ -530,7 +528,7 @@ export class OpenCodeRuntime implements ChatRuntime {
             skills.push({ name, description: `Local skill (${dir})`, enabled: true, type: 'skill' });
           }
         }
-      } catch {}
+      } catch { /* continue */ }
     }
 
     this.availableSkills = skills;
@@ -658,7 +656,7 @@ export class OpenCodeRuntime implements ChatRuntime {
       });
 
       const timeout = this.plugin.settings.cliTimeout || 300000;
-      const timeoutId = setTimeout(() => { try { child.kill('SIGTERM'); } catch {} }, timeout);
+      const timeoutId = setTimeout(() => { try { child.kill('SIGTERM'); } catch { /* continue */ } }, timeout);
 
       let stderr = '';
       child.stderr.on('data', (data) => { stderr += data.toString(); });
@@ -726,7 +724,7 @@ export class OpenCodeRuntime implements ChatRuntime {
       yield { type: 'error', error: error.message || 'CLI failed' };
     } finally {
       if (tempFileCreated && fs.existsSync(tempFile)) {
-        try { fs.unlinkSync(tempFile); } catch {}
+        try { fs.unlinkSync(tempFile); } catch { /* continue */ }
       }
     }
   }
@@ -828,7 +826,7 @@ export class OpenCodeRuntime implements ChatRuntime {
             const delta = parsed.choices?.[0]?.delta;
             if (delta?.thinking) yield { type: 'thinking', content: delta.thinking };
             if (delta?.content) yield { type: 'text', content: delta.content };
-          } catch {}
+          } catch { /* continue */ }
         }
       }
     } finally {

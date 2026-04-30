@@ -130,7 +130,7 @@ export class McpServerManager {
   }
 
   async disconnectAll(): Promise<void> {
-    for (const [name, conn] of this.sseConnections) {
+    for (const [, conn] of this.sseConnections) {
       conn.disconnect();
     }
     this.sseConnections.clear();

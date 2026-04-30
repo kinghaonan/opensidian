@@ -66,7 +66,7 @@ export class SSEClientTransport {
     let buffer = '';
 
     try {
-      while (true) {
+      while (this.reader) {
         const { done, value } = await this.reader.read();
         if (done) break;
 

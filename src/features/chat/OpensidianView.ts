@@ -11,7 +11,7 @@ import { Sidebar } from './components/Sidebar';
 import { TabBar } from './components/TabBar';
 import { ConnectionManager, StreamBuffer } from '../../core/agent/ConnectionManager';
 import { QuickToolSelection } from './components/ToolQuickPicker';
-import { TabManager, Tab } from './TabManager';
+import { TabManager } from './TabManager';
 import { StreamController } from './controllers/StreamController';
 
 export const VIEW_TYPE_OPENCODE = 'opensidian-chat-view';

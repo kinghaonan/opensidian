@@ -80,9 +80,6 @@ export class Sidebar {
     }
 
     this.renderBatchToolbar(lang);
-  }
-
-  private renderBatchToolbar(lang: string): void {
     if (!this.historyPanel) return;
     const toolbar = this.historyPanel.createDiv({ cls: 'opensidian-history-toolbar' });
     const selectAll = toolbar.createEl('button', { cls: 'opensidian-history-toolbar-btn', text: lang === 'zh' ? '全选' : 'Select All' });
@@ -91,7 +88,7 @@ export class Sidebar {
     deleteBtn.onclick = () => this.deleteSelected();
   }
 
-  private renderHistoryItem(session: SessionData, lang: Language): void {
+  private renderHistoryItem(session: SessionData, _lang: Language): void {
     if (!this.historyPanel) return;
     const item = this.historyPanel.createDiv({ cls: 'opensidian-history-item' });
     item.onclick = () => this.onLoadSession?.(session.id);

@@ -1,4 +1,4 @@
-import { ChatMessage, ImageAttachment, StreamChunk } from '../types/chat';
+import { ChatMessage, ImageAttachment } from '../types/chat';
 
 export type ChatTurnRequest = {
   prompt: string;
