@@ -11,6 +11,13 @@ main.js
 *.js.map
 styles.css
 !src/styles.css
+release/*.zip
+
+# Local agent/tool state
+.claw/
+.sisyphus/
+claudian-tmp/
+MODEL_SYNC_AND_SKILLS_FIX.md
 
 # IDE
 .vscode/
