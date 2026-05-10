@@ -1,20 +1,28 @@
-import { ItemView, WorkspaceLeaf, TFile, Notice } from 'obsidian';
+import { ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import OpensidianPlugin from '../../main';
+import { SessionData } from '../../core/storage/StorageService';
 import { ChatMessage, ImageAttachment } from '../../core/types/chat';
 import { AgentMode, Language } from '../../core/types/settings';
-import { SessionData } from '../../core/storage/StorageService';
 import { t } from '../../i18n';
+import { ConnectionManager } from '../../core/agent/ConnectionManager';
 import { ChatHeader } from './components/ChatHeader';
-import { MessageList } from './components/MessageList';
 import { InputArea } from './components/InputArea';
+import { MessageList } from './components/MessageList';
 import { Sidebar } from './components/Sidebar';
 import { TabBar } from './components/TabBar';
-import { ConnectionManager, StreamBuffer } from '../../core/agent/ConnectionManager';
 import { QuickToolSelection } from './components/ToolQuickPicker';
-import { TabManager } from './TabManager';
 import { StreamController } from './controllers/StreamController';
+import { TabManager } from './TabManager';
 
 export const VIEW_TYPE_OPENCODE = 'opensidian-chat-view';
+
+interface ActiveStreamState {
+  requestId: number;
+  assistantMessage: ChatMessage;
+  assistantContainer: HTMLElement;
+  streamController: StreamController;
+  interrupted: boolean;
+}
 
 export class OpensidianView extends ItemView {
   private plugin: OpensidianPlugin;
@@ -23,20 +31,22 @@ export class OpensidianView extends ItemView {
   private inputContainer!: HTMLElement;
   private sidebarContainer!: HTMLElement;
   private headerContainer!: HTMLElement;
-  
+
   private currentConversationId: string | null = null;
-  private streamingTabs: Set<string> = new Set();
-  
+  private streamingTabs = new Set<string>();
+  private activeStreams = new Map<string, ActiveStreamState>();
+  private requestSequence = 0;
+  private streamRequestTokens = new Map<string, string>();
+
   private header!: ChatHeader;
   private messageList!: MessageList;
   private inputArea!: InputArea;
   private sidebar!: Sidebar;
   private tabBar!: TabBar;
   private tabManager!: TabManager;
-  
+
   private connectionManager!: ConnectionManager;
-  private streamBuffer!: StreamBuffer;
-  
+
   private currentMode: AgentMode;
   private modeMemory: Map<string, { mode: AgentMode; messages: ChatMessage[] }> = new Map();
 
@@ -44,30 +54,32 @@ export class OpensidianView extends ItemView {
     super(leaf);
     this.plugin = plugin;
     this.currentMode = plugin.settings.agentMode;
-    
+
     this.tabManager = new TabManager();
     this.tabManager.setCallbacks({
       onTabCreated: (_tab) => {},
       onTabClosed: (tabId) => {
         this.streamingTabs.delete(tabId);
+        this.activeStreams.delete(tabId);
+        this.streamRequestTokens.delete(tabId);
         this.plugin.openCodeService.stopGeneration();
       },
       onTabSwitched: (_id) => this.onTabSwitched(),
     });
-    
+
     this.connectionManager = new ConnectionManager({
       maxRetries: 3,
       retryDelay: 1000,
       heartbeatInterval: 30000,
       timeout: 300000,
     });
-    
-    this.streamBuffer = new StreamBuffer();
+
     this.setupConnectionListeners();
   }
 
   private get isStreaming(): boolean {
-    return this.tabManager.getActiveTabId() ? this.streamingTabs.has(this.tabManager.getActiveTabId()!) : false;
+    const activeTabId = this.tabManager.getActiveTabId();
+    return activeTabId ? this.streamingTabs.has(activeTabId) : false;
   }
 
   private get messages(): ChatMessage[] {
@@ -76,11 +88,10 @@ export class OpensidianView extends ItemView {
 
   private set messages(msgs: ChatMessage[]) {
     const tab = this.tabManager.getActiveTab();
-    if (tab) { tab.messages = msgs; tab.updatedAt = Date.now(); }
-  }
-
-  private getLang(): Language {
-    return this.plugin.settings.language as Language || 'en';
+    if (tab) {
+      tab.messages = msgs;
+      tab.updatedAt = Date.now();
+    }
   }
 
   getViewType(): string {
@@ -97,23 +108,22 @@ export class OpensidianView extends ItemView {
 
   async onOpen(): Promise<void> {
     this.container = this.contentEl.createDiv({ cls: 'opensidian-container' });
-    
+
     this.createSidebar();
-    
+
     const mainContent = this.container.createDiv({ cls: 'opensidian-main-content' });
-    
     this.headerContainer = mainContent.createDiv();
     this.createHeader();
-    
+
     const tabBarContainer = mainContent.createDiv({ cls: 'opensidian-tab-bar-container' });
     this.createTabBar(tabBarContainer);
-    
+
     this.messagesContainer = mainContent.createDiv({ cls: 'opensidian-messages' });
     this.createMessageList();
-    
+
     this.inputContainer = mainContent.createDiv({ cls: 'opensidian-input-area' });
     this.createInputArea();
-    
+
     await this.loadConversation();
     this.registerEvents();
   }
@@ -141,6 +151,8 @@ export class OpensidianView extends ItemView {
       },
       onNewTab: () => {
         this.streamingTabs.clear();
+        this.activeStreams.clear();
+        this.streamRequestTokens.clear();
         this.plugin.openCodeService.stopGeneration();
         this.tabManager.createTab('New Chat', this.plugin.openCodeService.getActiveModel(), this.currentMode);
         this.messageList.clear();
@@ -155,16 +167,18 @@ export class OpensidianView extends ItemView {
   private onTabSwitched(): void {
     const newTab = this.tabManager.getActiveTab();
     if (!newTab) return;
+
     this.currentMode = newTab.mode;
     this.header.setMode(newTab.mode);
     this.inputArea.setStreaming(this.streamingTabs.has(newTab.id));
     this.header.setStreaming(this.streamingTabs.has(newTab.id));
     this.messageList.clear();
-    const msgs = newTab.messages.filter(m => m.content || m.role === 'user');
-    if (msgs.length === 0) {
+
+    const visibleMessages = newTab.messages.filter(message => message.content || message.role === 'user');
+    if (visibleMessages.length === 0) {
       this.messageList.addWelcomeMessage();
     } else {
-      this.messageList.setMessages(msgs);
+      this.messageList.setMessages(visibleMessages);
     }
   }
 
@@ -224,19 +238,19 @@ export class OpensidianView extends ItemView {
     if (this.currentConversationId) {
       this.modeMemory.set(`${this.currentConversationId}-${this.currentMode}`, {
         mode: this.currentMode,
-        messages: [...this.messages]
+        messages: [...this.messages],
       });
     }
-    
+
     this.currentMode = mode;
     this.messageList.addModeIndicator(mode);
-    
+
     const saved = this.modeMemory.get(`${this.currentConversationId}-${mode}`);
     if (saved) {
       this.messages = saved.messages;
       this.messageList.setMessages(this.messages);
     }
-    
+
     new Notice(t('modeSwitched', this.plugin.settings.language));
   }
 
@@ -252,32 +266,18 @@ export class OpensidianView extends ItemView {
       this.tabManager.createTab('Chat', this.plugin.openCodeService.getActiveModel(), this.currentMode);
       this.tabBar.render();
     }
+
     this.messageList.clear();
     this.messageList.addWelcomeMessage();
   }
 
-  private async sendMessage(text: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]): Promise<void> {
-    const activeTabId = this.tabManager.getActiveTabId();
-    if (!activeTabId || this.streamingTabs.has(activeTabId)) return;
-    console.log('[Opensidian] sendMessage called, text:', text.substring(0, 50));
-    
-    const lang = this.plugin.settings.language;
-    
-    if (this.messages.length >= 20) {
-      const warningMsg = lang === 'zh'
-        ? `当前对话历史已超�?20 条消息。长对话历史可能导致响应超时或失败。是否继续？`
-        : `Current conversation has exceeded 20 messages. Long history may cause timeouts. Continue?`;
-      
-      if (!confirm(warningMsg)) return;
-    }
-
+  private buildUserMessage(text: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]): ChatMessage {
+    const lang = this.plugin.settings.language as Language;
     let messageContent = text;
     let displayContent = text;
+
     if (attachments.length > 0) {
-      const attachmentList = attachments
-        .map(att => `- ${att.fileName || 'file'}`)
-        .join('\n');
-      
+      const attachmentList = attachments.map(att => `- ${att.fileName || 'file'}`).join('\n');
       messageContent = lang === 'zh'
         ? `用户上传了以下附件：\n${attachmentList}\n\n用户的问题：\n${text}`
         : `User uploaded attachments:\n${attachmentList}\n\nUser's question:\n${text}`;
@@ -285,15 +285,15 @@ export class OpensidianView extends ItemView {
     }
 
     if (tools && tools.length > 0) {
-      const mcpTools = tools.filter(t => t.type === 'mcp').map(t => t.name);
-      const skillTools = tools.filter(t => t.type === 'skill').map(t => t.name);
+      const mcpTools = tools.filter(tool => tool.type === 'mcp').map(tool => tool.name);
+      const skillTools = tools.filter(tool => tool.type === 'skill').map(tool => tool.name);
       const toolHint = lang === 'zh'
         ? `\n\n[已选择工具]\n${mcpTools.length ? `MCP: ${mcpTools.join(', ')}\n` : ''}${skillTools.length ? `Skills: ${skillTools.join(', ')}` : ''}\n请优先使用这些工具。`
         : `\n\n[Selected tools]\n${mcpTools.length ? `MCP: ${mcpTools.join(', ')}\n` : ''}${skillTools.length ? `Skills: ${skillTools.join(', ')}` : ''}\nPlease prioritize using these tools.`;
       messageContent += toolHint;
     }
 
-    const userMessage: ChatMessage = {
+    return {
       id: this.generateId(),
       role: 'user',
       content: messageContent,
@@ -301,11 +301,27 @@ export class OpensidianView extends ItemView {
       timestamp: Date.now(),
       images: attachments.length > 0 ? attachments : undefined,
       toolSummary: tools && tools.length > 0 ? {
-        mcp: tools.filter(t => t.type === 'mcp').map(t => t.name),
-        skills: tools.filter(t => t.type === 'skill').map(t => t.name)
-      } : undefined
+        mcp: tools.filter(tool => tool.type === 'mcp').map(tool => tool.name),
+        skills: tools.filter(tool => tool.type === 'skill').map(tool => tool.name),
+      } : undefined,
     };
+  }
 
+  private async sendMessage(text: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]): Promise<void> {
+    const activeTabId = this.tabManager.getActiveTabId();
+    if (!activeTabId || this.streamingTabs.has(activeTabId)) return;
+
+    console.log('[Opensidian] sendMessage called, text:', text.substring(0, 50));
+    const lang = this.plugin.settings.language as Language;
+
+    if (this.messages.length >= 20) {
+      const warningMsg = lang === 'zh'
+        ? '当前对话历史已经超过 20 条消息。过长的上下文可能导致超时或失败，是否继续？'
+        : 'Current conversation has exceeded 20 messages. Long history may cause timeouts. Continue?';
+      if (!confirm(warningMsg)) return;
+    }
+
+    const userMessage = this.buildUserMessage(text, attachments, tools);
     this.messages.push(userMessage);
     this.messageList.addMessage(userMessage);
 
@@ -314,26 +330,41 @@ export class OpensidianView extends ItemView {
     this.header.setStreaming(true);
 
     const context = await this.prepareContext(text);
+    const requestToken = this.generateId();
     const assistantMsgId = this.generateId();
     const assistantContainer = this.messageList.createStreamingMessage(assistantMsgId);
-    const streamController = new StreamController(assistantContainer, this.plugin, () => this.messageList.scrollToBottom());
+    const streamController = new StreamController(
+      assistantContainer,
+      this.plugin,
+      () => this.messageList.scrollToBottom(),
+    );
 
     const pendingMsg: ChatMessage = {
-      id: assistantMsgId, role: 'assistant', content: '', timestamp: Date.now(),
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
     };
     this.messages.push(pendingMsg);
 
-    let fullContent = '';
-    let thinkingContent = '';
-    let lastChunkType = '';
+    this.requestSequence += 1;
+    this.activeStreams.set(activeTabId, {
+      requestId: this.requestSequence,
+      assistantMessage: pendingMsg,
+      assistantContainer,
+      streamController,
+      interrupted: false,
+    });
+    this.streamRequestTokens.set(activeTabId, requestToken);
 
     try {
       let autoTurnCount = 0;
-      const MAX_AUTO_TURNS = 3;
-      let currentPrompt = messageContent;
+      const maxAutoTurns = 3;
+      let currentPrompt = userMessage.content;
       let currentHistory = this.messages.slice(0, -1);
+      let lastChunkType = '';
 
-      while (autoTurnCount <= MAX_AUTO_TURNS) {
+      while (autoTurnCount <= maxAutoTurns) {
         if (autoTurnCount > 0) {
           currentPrompt = lang === 'zh' ? '继续' : 'Continue';
           currentHistory = this.messages.slice(0, -1);
@@ -341,10 +372,12 @@ export class OpensidianView extends ItemView {
 
         const systemPrompt = this.buildSystemPrompt(context, tools);
         const stream = this.plugin.openCodeService.query(currentPrompt, {
-          conversationHistory: currentHistory, systemPrompt, stream: true,
+          conversationHistory: currentHistory,
+          systemPrompt,
+          stream: true,
           thinking: this.plugin.settings.showThinking,
           attachments: autoTurnCount === 0 && attachments.length > 0 ? attachments : undefined,
-          sessionId: this.tabManager.getActiveTab()?.sessionId
+          sessionId: this.tabManager.getActiveTab()?.sessionId,
         });
 
         lastChunkType = '';
@@ -356,144 +389,88 @@ export class OpensidianView extends ItemView {
 
         if (lastChunkType === 'error') break;
         if (lastChunkType !== 'tool_call' && lastChunkType !== 'tool_result') break;
-        autoTurnCount++;
+        autoTurnCount += 1;
       }
 
-      fullContent = streamController.getFullText();
-      thinkingContent = streamController.getFullThinking();
-      pendingMsg.content = fullContent;
-      pendingMsg.thinking = thinkingContent || undefined;
+      pendingMsg.content = streamController.getFullText();
+      pendingMsg.thinking = streamController.getFullThinking() || undefined;
 
-      const assistantMessage: ChatMessage = {
-        id: assistantMsgId, role: 'assistant',
-        content: fullContent, timestamp: Date.now(),
-        thinking: thinkingContent || undefined
-      };
-      this.messages.push(assistantMessage);
-      
       const activeTab = this.tabManager.getActiveTab();
-      if (activeTab && activeTab.title === 'New Chat' && fullContent) {
-        this.tabManager.updateTab(activeTab.id, { title: fullContent.substring(0, 30) });
+      if (activeTab && activeTab.title === 'New Chat' && pendingMsg.content) {
+        this.tabManager.updateTab(activeTab.id, { title: pendingMsg.content.substring(0, 30) });
         this.tabBar.refresh();
       }
-      
+
       await this.saveConversation();
     } catch (error) {
       console.error('Error sending message:', error);
-      this.messageList.showErrorMessage(assistantContainer, t('connectionError', lang));
+      if (this.streamRequestTokens.get(activeTabId) === requestToken) {
+        this.messageList.showErrorMessage(assistantContainer, t('connectionError', this.plugin.settings.language));
+      }
     } finally {
-      const tid = this.tabManager.getActiveTabId();
-      if (tid) this.streamingTabs.delete(tid);
-      this.inputArea.setStreaming(false);
-      this.header.setStreaming(false);
-      this.inputArea.focus();
+      if (this.streamRequestTokens.get(activeTabId) === requestToken) {
+        this.activeStreams.delete(activeTabId);
+        this.streamRequestTokens.delete(activeTabId);
+        this.streamingTabs.delete(activeTabId);
+        this.inputArea.setStreaming(false);
+        this.header.setStreaming(false);
+        this.inputArea.focus();
+      }
+    }
+  }
+
+  private finalizeStreamForTab(tabId: string, keepPartialContent: boolean): void {
+    const streamState = this.activeStreams.get(tabId);
+    if (!streamState) return;
+
+    streamState.interrupted = true;
+    streamState.streamController.complete();
+
+    if (!streamState.streamController.hasVisibleOutput()) {
+      this.messages = this.messages.filter(message => message.id !== streamState.assistantMessage.id);
+      this.messageList.removeMessage(streamState.assistantMessage.id);
+      return;
+    }
+
+    if (keepPartialContent) {
+      streamState.assistantMessage.content = streamState.streamController.getFullText();
+      streamState.assistantMessage.thinking = streamState.streamController.getFullThinking() || undefined;
     }
   }
 
   private stopGeneration(): void {
+    const activeTabId = this.tabManager.getActiveTabId();
+    if (activeTabId) {
+      this.finalizeStreamForTab(activeTabId, true);
+      this.activeStreams.delete(activeTabId);
+      this.streamRequestTokens.delete(activeTabId);
+      this.streamingTabs.delete(activeTabId);
+    }
+
     this.plugin.openCodeService.stopGeneration();
-    const tid = this.tabManager.getActiveTabId();
-    if (tid) this.streamingTabs.delete(tid);
     this.inputArea.setStreaming(false);
     this.header.setStreaming(false);
     this.inputArea.focus();
+    void this.saveConversation();
     new Notice(t('requestCancelled', this.plugin.settings.language));
   }
 
   private async appendMessage(text: string, attachments: ImageAttachment[], tools?: QuickToolSelection[]): Promise<void> {
-    if (!this.isStreaming) return;
-    
-    const lang = this.plugin.settings.language;
-    let messageContent = text;
-    let displayContent = text;
-    
-    if (attachments.length > 0) {
-      const attachmentList = attachments
-        .map(att => `- ${att.fileName || 'file'}`)
-        .join('\n');
-      
-      messageContent = lang === 'zh'
-        ? `用户上传了以下附件：\n${attachmentList}\n\n用户的问题：\n${text}`
-        : `User uploaded attachments:\n${attachmentList}\n\nUser's question:\n${text}`;
-      displayContent = messageContent;
-    }
-    
-    const userMessage: ChatMessage = {
-      id: this.generateId(),
-      role: 'user',
-      content: messageContent,
-      displayContent,
-      timestamp: Date.now(),
-      images: attachments.length > 0 ? attachments : undefined,
-      toolSummary: tools && tools.length > 0 ? {
-        mcp: tools.filter(t => t.type === 'mcp').map(t => t.name),
-        skills: tools.filter(t => t.type === 'skill').map(t => t.name)
-      } : undefined
-    };
-    
-    this.messages.push(userMessage);
-    this.messageList.addMessage(userMessage);
-    
-    const context = await this.prepareContext(text);
-    const conversationHistory = this.messages.slice(0, -1);
-    const systemPrompt = this.buildSystemPrompt(context, tools);
-    
-    try {
-      const stream = this.plugin.openCodeService.query(messageContent, {
-        conversationHistory,
-        systemPrompt,
-        stream: true,
-        thinking: this.plugin.settings.showThinking,
-        attachments: attachments.length > 0 ? attachments : undefined,
-        sessionId: this.tabManager.getActiveTab()?.sessionId
-      });
-      
-      const assistantContainer = this.messageList.createStreamingMessage(this.generateId());
-      let fullContent = '';
-      let thinkingContent = '';
-
-      const streamBuffer = new StreamBuffer((content, thinking) => {
-        if (content) fullContent += content;
-        if (thinking) thinkingContent += thinking;
-        this.messageList.updateStreamingMessage(assistantContainer, fullContent, thinkingContent, false);
-        this.messageList.updateThinking(assistantContainer, thinkingContent);
-      }, { flushInterval: 120, maxBufferSize: 2000 });
-      
-      for await (const chunk of stream) {
-        if (chunk.type === 'text' && chunk.content) {
-          streamBuffer.appendText(chunk.content);
-        } else if (chunk.type === 'thinking' && chunk.content) {
-          streamBuffer.appendThinking(chunk.content);
-        } else if (chunk.type === 'tool_call' && chunk.toolCall) {
-          streamBuffer.flush(true);
-          this.messageList.addToolCall(assistantContainer, chunk.toolCall);
-        } else if (chunk.type === 'tool_result' && chunk.toolCall) {
-          this.messageList.updateToolResult(assistantContainer, chunk.toolCall);
-        } else if (chunk.type === 'error') {
-          this.messageList.showErrorMessage(assistantContainer, chunk.error || t('error', lang));
-          break;
-        } else if (chunk.type === 'done') {
-          streamBuffer.flush(true);
-          break;
-        }
+    if (this.isStreaming) {
+      const activeTabId = this.tabManager.getActiveTabId();
+      if (activeTabId) {
+        this.finalizeStreamForTab(activeTabId, true);
+        this.activeStreams.delete(activeTabId);
+        this.streamRequestTokens.delete(activeTabId);
+        this.streamingTabs.delete(activeTabId);
       }
 
-      streamBuffer.flush(true);
-      this.messageList.updateStreamingMessage(assistantContainer, fullContent, thinkingContent, true);
-      
-      const assistantMessage: ChatMessage = {
-        id: this.generateId(),
-        role: 'assistant',
-        content: fullContent,
-        timestamp: Date.now(),
-        thinking: thinkingContent || undefined
-      };
-      
-      this.messages.push(assistantMessage);
-      await this.saveConversation();
-    } catch (error) {
-      console.error('Error appending message:', error);
+      this.plugin.openCodeService.stopGeneration();
+      this.inputArea.setStreaming(false);
+      this.header.setStreaming(false);
     }
+
+    await this.sendMessage(text, attachments, tools);
   }
 
   private async prepareContext(input: string): Promise<any> {
@@ -501,33 +478,35 @@ export class OpensidianView extends ItemView {
       files: [],
       activeFile: null,
       mode: this.currentMode,
-      vaultPath: this.plugin.getVaultPath()
+      vaultPath: this.plugin.getVaultPath(),
     };
 
     const mentions = input.match(/@(\S+)/g) || [];
     for (const mention of mentions) {
       const fileName = mention.slice(1);
       const file = this.plugin.app.metadataCache.getFirstLinkpathDest(fileName, '');
-      if (file) {
-        let content = await this.plugin.getFileContent(file);
-        if (content.length > 4000) {
-          content = content.substring(0, 4000) + '\n\n... (truncated)';
-        }
-        const fullPath = this.plugin.getVaultPath() 
-          ? `${this.plugin.getVaultPath()}/${file.path}` 
-          : file.path;
-        context.files.push({ path: file.path, fullPath, content });
+      if (!file) continue;
+
+      let content = await this.plugin.getFileContent(file);
+      if (content.length > 4000) {
+        content = `${content.substring(0, 4000)}\n\n... (truncated)`;
       }
+
+      const fullPath = this.plugin.getVaultPath()
+        ? `${this.plugin.getVaultPath()}/${file.path}`
+        : file.path;
+      context.files.push({ path: file.path, fullPath, content });
     }
 
     const activeFile = this.plugin.getActiveFile();
-    if (activeFile && !context.files.find((f: any) => f.path === activeFile.path)) {
+    if (activeFile && !context.files.find((file: any) => file.path === activeFile.path)) {
       let content = await this.plugin.getFileContent(activeFile);
       if (content.length > 4000) {
-        content = content.substring(0, 4000) + '\n\n... (truncated)';
+        content = `${content.substring(0, 4000)}\n\n... (truncated)`;
       }
-      const fullPath = this.plugin.getVaultPath() 
-        ? `${this.plugin.getVaultPath()}/${activeFile.path}` 
+
+      const fullPath = this.plugin.getVaultPath()
+        ? `${this.plugin.getVaultPath()}/${activeFile.path}`
         : activeFile.path;
       context.activeFile = { path: activeFile.path, fullPath, content };
     }
@@ -536,7 +515,7 @@ export class OpensidianView extends ItemView {
   }
 
   private buildSystemPrompt(context: any, tools?: QuickToolSelection[]): string {
-    const lang = this.plugin.settings.language;
+    const lang = this.plugin.settings.language as Language;
     let prompt = lang === 'zh'
       ? '你是一个帮助管理 Obsidian 笔记库的 AI 助手。你可以访问笔记库内容，读取、写入和编辑笔记。请提供有帮助、简洁且准确的回答。\n\n'
       : 'You are an AI assistant helping with an Obsidian vault. You have access to vault contents and can read, write, and edit notes. Be helpful, concise, and accurate.\n\n';
@@ -548,8 +527,8 @@ export class OpensidianView extends ItemView {
     }
 
     if (context.vaultPath) {
-      prompt += lang === 'zh' 
-        ? `笔记库路径：${context.vaultPath}\n\n` 
+      prompt += lang === 'zh'
+        ? `笔记库路径：${context.vaultPath}\n\n`
         : `Vault path: ${context.vaultPath}\n\n`;
     }
 
@@ -561,32 +540,33 @@ export class OpensidianView extends ItemView {
     }
 
     if (context.activeFile) {
-      prompt += lang === 'zh' 
-        ? `当前文件：${context.activeFile.path}\n` 
+      prompt += lang === 'zh'
+        ? `当前文件：${context.activeFile.path}\n`
         : `Active file: ${context.activeFile.path}\n`;
     }
 
     if (tools && tools.length > 0) {
-      const mcpTools = tools.filter(t => t.type === 'mcp').map(t => t.name);
-      const skillTools = tools.filter(t => t.type === 'skill').map(t => t.name);
+      const mcpTools = tools.filter(tool => tool.type === 'mcp').map(tool => tool.name);
+      const skillTools = tools.filter(tool => tool.type === 'skill').map(tool => tool.name);
+
       if (lang === 'zh') {
-        prompt += `\n用户已选择工具，请优先使用这些工具来完成任务。\n`;
-        if (mcpTools.length > 0) {
-          prompt += `MCP：${mcpTools.join(', ')}\n`;
-        }
-        if (skillTools.length > 0) {
-          prompt += `Skills：${skillTools.join(', ')}\n`;
-        }
-        prompt += `如果任务适合调用技能，请主动调用已选择的 skill。\n\n`;
-      } else {
-        prompt += `\nUser selected tools. Prefer using these tools to complete the task.\n`;
+        prompt += '\n用户已选择工具，请优先使用这些工具来完成任务。\n';
         if (mcpTools.length > 0) {
           prompt += `MCP: ${mcpTools.join(', ')}\n`;
         }
         if (skillTools.length > 0) {
           prompt += `Skills: ${skillTools.join(', ')}\n`;
         }
-        prompt += `If a task fits a skill, proactively call the selected skill.\n\n`;
+        prompt += '如果任务适合调用技能，请主动调用已选择的 skill。\n\n';
+      } else {
+        prompt += '\nUser selected tools. Prefer using these tools to complete the task.\n';
+        if (mcpTools.length > 0) {
+          prompt += `MCP: ${mcpTools.join(', ')}\n`;
+        }
+        if (skillTools.length > 0) {
+          prompt += `Skills: ${skillTools.join(', ')}\n`;
+        }
+        prompt += 'If a task fits a skill, proactively call the selected skill.\n\n';
       }
     }
 
@@ -611,7 +591,7 @@ export class OpensidianView extends ItemView {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       model: this.plugin.openCodeService.getActiveModel(),
-      mode: this.currentMode
+      mode: this.currentMode,
     };
 
     await this.plugin.storage.saveSession(this.currentConversationId, session);
@@ -625,7 +605,7 @@ export class OpensidianView extends ItemView {
     this.currentConversationId = sessionId;
     this.messages = session.messages || [];
     this.currentMode = session.mode || this.plugin.settings.agentMode;
-    
+
     this.header.setMode(this.currentMode);
     this.messageList.setMessages(this.messages);
   }
@@ -645,30 +625,32 @@ export class OpensidianView extends ItemView {
         this.startNewConversation();
       }
     }
+
     await this.sidebar.refresh();
   }
 
   private async refreshView(): Promise<void> {
     if (this.isStreaming) return;
+
     const savedMessages = [...this.messages];
     const savedConversationId = this.currentConversationId;
 
     this.container.empty();
     this.createSidebar();
-    
+
     const mainContent = this.container.createDiv({ cls: 'opensidian-main-content' });
     this.headerContainer = mainContent.createDiv();
     this.createHeader();
-    
+
     const tabBarContainer = mainContent.createDiv({ cls: 'opensidian-tab-bar-container' });
     this.createTabBar(tabBarContainer);
-    
+
     this.messagesContainer = mainContent.createDiv({ cls: 'opensidian-messages' });
     this.createMessageList();
-    
+
     this.inputContainer = mainContent.createDiv({ cls: 'opensidian-input-area' });
     this.createInputArea();
-    
+
     this.currentConversationId = savedConversationId;
     this.messages = savedMessages;
     if (this.messages.length === 0) {
@@ -682,11 +664,11 @@ export class OpensidianView extends ItemView {
     this.registerEvent(
       (this.app.workspace as any).on('opensidian:new-conversation', () => {
         this.startNewConversation();
-      })
+      }),
     );
 
     this.registerEvent(
-      (this.app.workspace as any).on('opensidian:active-file-change', (_file: TFile) => {})
+      (this.app.workspace as any).on('opensidian:active-file-change', (_file: TFile) => {}),
     );
 
     document.addEventListener('opensidian:welcome-prompt', ((e: CustomEvent) => {
@@ -695,7 +677,7 @@ export class OpensidianView extends ItemView {
     }) as EventListener);
 
     document.addEventListener('opensidian:daily-send', ((e: CustomEvent) => {
-      this.sendMessage(e.detail, [], []);
+      void this.sendMessage(e.detail, [], []);
     }) as EventListener);
   }
 
@@ -707,25 +689,18 @@ export class OpensidianView extends ItemView {
   }
 
   private generateId(): string {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    return `${Date.now().toString(36)}${Math.random().toString(36).substr(2)}`;
   }
 
-  /**
-   * 重连 OpenCode CLI
-   */
   private async reconnect(): Promise<void> {
-    const lang = this.plugin.settings.language;
+    const lang = this.plugin.settings.language as Language;
     new Notice(lang === 'zh' ? '正在重连...' : 'Reconnecting...');
-    
+
     try {
-      // 重置并重新初始化 OpenCode 服务
       this.plugin.openCodeService.reset();
       await this.plugin.openCodeService.initialize();
-      
-      // 更新连接状态和模型列表
       this.header.updateConnectionStatus();
       this.header.populateModelSelect();
-      
       new Notice(lang === 'zh' ? '重连成功！' : 'Reconnected!');
     } catch (error) {
       console.error('Reconnect failed:', error);

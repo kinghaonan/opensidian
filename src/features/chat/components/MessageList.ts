@@ -60,6 +60,12 @@ export class MessageList {
     this.scrollToBottom();
   }
 
+  removeMessage(messageId: string): void {
+    this.messages = this.messages.filter(message => message.id !== messageId);
+    this.container.querySelector(`[data-message-id="${messageId}"]`)?.remove();
+    this.scrollToBottom();
+  }
+
   private renderAll(): void {
     this.container.empty();
     for (const message of this.messages) {

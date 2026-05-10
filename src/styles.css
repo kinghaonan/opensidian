@@ -144,12 +144,28 @@
 .opensidian-header-btn:hover,.opensidian-mode-btn:hover{background:var(--os-bg-hover);color:var(--os-accent);}
 .opensidian-mode-btn{padding:5px 10px;font-weight:500;}
 .opensidian-header-stop-btn {
-    background:var(--os-error);color:#fff;border:0;
-    padding:6px 10px;border-radius:var(--os-radius-xs);cursor:pointer;
-    transition:var(--os-transition);display:none;align-items:center;
-    justify-content:center;animation:pulse 2s infinite;
+    background:rgba(59,130,246,.1);
+    color:rgba(59,130,246,.42);
+    border:1px solid rgba(59,130,246,.18);
+    padding:6px 8px;border-radius:12px;cursor:pointer;
+    transition:var(--os-transition);display:flex;align-items:center;
+    justify-content:center;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.02);
 }
-.opensidian-header-stop-btn.visible{display:flex;}
+.opensidian-header-stop-btn svg{display:block;}
+.opensidian-header-stop-btn:hover{
+    background:rgba(59,130,246,.14);
+    border-color:rgba(59,130,246,.32);
+    color:rgba(59,130,246,.72);
+    transform:translateY(-1px);
+}
+.opensidian-header-stop-btn.active{
+    background:linear-gradient(135deg,#2563eb,#38bdf8);
+    border-color:rgba(56,189,248,.55);
+    color:#fff;
+    box-shadow:0 0 0 1px rgba(96,165,250,.18),0 8px 20px rgba(37,99,235,.35);
+    animation:pulse 2s infinite;
+}
 
 /* Model Dropdown */
 .opensidian-model-wrapper{position:relative;}

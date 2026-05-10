@@ -214,18 +214,17 @@ export class ChatHeader {
       cls: 'opensidian-header-stop-btn',
       attr: { 'aria-label': t('stop', lang) }
     });
-    this.stopBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+    this.stopBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6 19.5 7v10L12 21.4 4.5 17V7Z" fill="currentColor" opacity="0.18"/><path d="M12 2.6 19.5 7v10L12 21.4 4.5 17V7Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><text x="12" y="15.2" text-anchor="middle" font-size="10.5" font-weight="700" fill="currentColor">S</text></svg>`;
     this.stopBtn.title = lang === 'zh' ? '停止生成' : 'Stop generation';
-    this.stopBtn.style.display = 'none';
     this.stopBtn.onclick = () => this.onStop?.();
   }
 
   setStreaming(streaming: boolean): void {
     if (this.stopBtn) {
       if (streaming) {
-        this.stopBtn.addClass('visible');
+        this.stopBtn.addClass('active');
       } else {
-        this.stopBtn.removeClass('visible');
+        this.stopBtn.removeClass('active');
       }
     }
   }

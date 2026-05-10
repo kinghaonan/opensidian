@@ -16,6 +16,7 @@ export class StreamController {
   private placeholder: HTMLElement | null = null;
   private fullText = '';
   private fullThinking = '';
+  private finalized = false;
 
   constructor(container: HTMLElement, plugin: OpensidianPlugin, onScroll: () => void) {
     this.container = container;
@@ -67,9 +68,7 @@ export class StreamController {
         break;
 
       case 'done':
-        this.finalizeThinking();
-        this.finalizeText();
-        this.renderCopyButton();
+        this.complete();
         break;
 
       case 'error':
@@ -126,6 +125,9 @@ export class StreamController {
   }
 
   private renderCopyButton(): void {
+    if (this.container.querySelector('.claudian-copy-btn')) {
+      return;
+    }
     const btn = this.container.createEl('button', { cls: 'claudian-copy-btn' });
     btn.innerHTML = '📋 复制';
     btn.onclick = () => {
@@ -139,8 +141,21 @@ export class StreamController {
   getFullText(): string { return this.fullText; }
   getFullThinking(): string { return this.fullThinking; }
 
+  hasVisibleOutput(): boolean {
+    return this.fullText.trim().length > 0 || this.fullThinking.trim().length > 0 || this.toolStates.size > 0;
+  }
+
+  complete(): void {
+    if (this.finalized) return;
+    this.finalized = true;
+    this.finalizeThinking();
+    this.finalizeText();
+    this.renderCopyButton();
+  }
+
   reset(): void {
     this.finalizeThinking();
+    this.finalized = false;
     this.fullText = '';
     this.fullThinking = '';
     this.textEl = null;
