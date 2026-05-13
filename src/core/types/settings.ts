@@ -26,6 +26,11 @@ export interface LocalModelConfig {
   model: string;
 }
 
+export interface ModelUsageRecord {
+  lastUsed: number;
+  useCount: number;
+}
+
 export interface ModelInfo {
   id: string;
   name: string;
@@ -60,6 +65,7 @@ export interface OpensidianSettings {
   smallModel: string;
   customModel?: string;
   useFreeModels: boolean;  // 使用免费模型
+  modelUsage: Record<string, ModelUsageRecord>;  // 模型使用记录：{ modelId: { lastUsed, useCount } }
   
   // Local model settings
   localModel: LocalModelConfig;
@@ -125,6 +131,7 @@ export const DEFAULT_SETTINGS: OpensidianSettings = {
   model: 'auto',
   smallModel: 'auto',
   useFreeModels: true,  // 默认启用免费模型
+  modelUsage: {},
   localModel: {
     enabled: false,
     provider: 'ollama',

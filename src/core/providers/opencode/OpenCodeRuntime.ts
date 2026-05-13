@@ -210,17 +210,73 @@ export class OpenCodeRuntime implements ChatRuntime {
     if (this.plugin.settings.localModel.enabled) {
       return `local/${this.plugin.settings.localModel.model}`;
     }
-    if (this.plugin.settings.useFreeModels && !this.opencodeConfig) {
-      return FREE_MODELS[0].id;
-    }
     if (this.plugin.settings.model !== 'auto') {
       return this.plugin.settings.model;
+    }
+    const lastUsed = this.getLastUsedModel();
+    if (lastUsed) return lastUsed;
+    if (this.plugin.settings.useFreeModels && !this.opencodeConfig) {
+      return FREE_MODELS[0].id;
     }
     return this.opencodeConfig?.model || FREE_MODELS[0].id;
   }
 
+  private getLastUsedModel(): string | null {
+    const usage = this.plugin.settings.modelUsage;
+    let lastUsed: string | null = null;
+    let lastTime = 0;
+    for (const [modelId, record] of Object.entries(usage)) {
+      if (record.lastUsed > lastTime) {
+        lastTime = record.lastUsed;
+        lastUsed = modelId;
+      }
+    }
+    return lastUsed;
+  }
+
+  getRecentModels(limit: number = 5): ModelInfo[] {
+    const usage = this.plugin.settings.modelUsage;
+    const sorted = Object.entries(usage)
+      .sort(([, a], [, b]) => b.lastUsed - a.lastUsed)
+      .slice(0, limit)
+      .map(([id]) => id);
+    return sorted
+      .map(id => this.availableModels.find(m => m.id === id))
+      .filter(Boolean) as ModelInfo[];
+  }
+
+  getModelsByProvider(): Map<string, ModelInfo[]> {
+    const usage = this.plugin.settings.modelUsage;
+    const grouped = new Map<string, ModelInfo[]>();
+    for (const model of this.availableModels) {
+      const provider = model.provider || 'other';
+      if (!grouped.has(provider)) {
+        grouped.set(provider, []);
+      }
+      grouped.get(provider)!.push(model);
+    }
+    for (const [, models] of grouped) {
+      models.sort((a, b) => {
+        const countA = usage[a.id]?.useCount || 0;
+        const countB = usage[b.id]?.useCount || 0;
+        return countB - countA;
+      });
+    }
+    return grouped;
+  }
+
+  private recordModelUsage(modelId: string): void {
+    if (!modelId || modelId === 'auto') return;
+    const usage = this.plugin.settings.modelUsage[modelId];
+    this.plugin.settings.modelUsage[modelId] = {
+      lastUsed: Date.now(),
+      useCount: (usage?.useCount || 0) + 1,
+    };
+  }
+
   async switchModel(modelId: string): Promise<void> {
     this.plugin.settings.model = modelId;
+    this.recordModelUsage(modelId);
     await this.plugin.saveSettings();
     if (!modelId.startsWith('local/')) {
       await this.setupProvider();

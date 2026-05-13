@@ -73,6 +73,14 @@ export class OpenCodeService {
     return (this.runtime as any).availableModels || [];
   }
 
+  getRecentModels(limit?: number): ModelInfo[] {
+    return this.runtime.getRecentModels(limit);
+  }
+
+  getModelsByProvider(): Map<string, ModelInfo[]> {
+    return this.runtime.getModelsByProvider();
+  }
+
   getAvailableMCPServers(): Array<{name: string; description?: string; enabled: boolean}> {
     return (this.runtime as any).availableMCPServers || [];
   }

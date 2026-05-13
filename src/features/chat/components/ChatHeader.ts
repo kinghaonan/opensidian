@@ -140,35 +140,26 @@ export class ChatHeader {
   private populateModelDropdown(): void {
     this.modelDropdown.empty();
     const currentModel = this.plugin.openCodeService.getActiveModel();
-    const availableModels = this.plugin.openCodeService.getAvailableModels();
+
+    const recentModels = this.plugin.openCodeService.getRecentModels(5);
+    const recentIds = new Set(recentModels.map(m => m.id));
+    if (recentModels.length > 0) {
+      this.createModelGroup('Recent', recentModels, currentModel);
+    }
+
     const autoItem = this.modelDropdown.createDiv({ cls: 'opensidian-model-item' });
     autoItem.textContent = 'Auto';
-    if (this.plugin.settings.model === 'auto') {
+    if (currentModel === 'auto') {
       autoItem.addClass('opensidian-model-item-active');
     }
     autoItem.onclick = () => this.selectModel('auto');
 
-    const freeModels = availableModels.filter((m: any) => m.isFree);
-    const paidModels = availableModels.filter((m: any) => !m.isFree && m.provider === 'opencode');
-    const localModels = availableModels.filter((m: any) => m.provider === 'local');
-    const otherModels = availableModels.filter((m: any) => 
-      !m.isFree && m.provider !== 'opencode' && m.provider !== 'local'
-    );
-
-    if (freeModels.length > 0) {
-      this.createModelGroup('Free', freeModels, currentModel);
-    }
-
-    if (paidModels.length > 0) {
-      this.createModelGroup('Zen', paidModels, currentModel);
-    }
-
-    if (localModels.length > 0) {
-      this.createModelGroup('Local', localModels, currentModel);
-    }
-
-    if (otherModels.length > 0) {
-      this.createModelGroup('Other', otherModels, currentModel);
+    const grouped = this.plugin.openCodeService.getModelsByProvider();
+    for (const [provider, models] of grouped) {
+      const filtered = models.filter(m => !recentIds.has(m.id));
+      if (filtered.length > 0) {
+        this.createModelGroup(this.getProviderLabel(provider), filtered, currentModel);
+      }
     }
     
     const refreshItem = this.modelDropdown.createDiv({ cls: 'opensidian-model-refresh' });
@@ -177,6 +168,17 @@ export class ChatHeader {
       this.onRefreshModels?.();
       this.closeDropdown();
     };
+  }
+
+  private getProviderLabel(provider: string): string {
+    const labels: Record<string, string> = {
+      'opencode': 'OpenCode',
+      'anthropic': 'Anthropic',
+      'openai': 'OpenAI',
+      'google': 'Google',
+      'local': 'Local',
+    };
+    return labels[provider] || provider;
   }
 
   private createModelGroup(label: string, models: any[], currentModel: string): void {
